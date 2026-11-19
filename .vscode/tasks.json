@@ -1,9 +1,0 @@
-{
-  "version": "2.0.0",
-  "tasks": [
-    { "label": "API: install", "type": "shell", "command": "npm install", "options": { "cwd": "${workspaceFolder}/api" } },
-    { "label": "API: dev server", "type": "shell", "command": "npm run dev", "options": { "cwd": "${workspaceFolder}/api" }, "isBackground": true, "problemMatcher": [] },
-    { "label": "API: unit tests", "type": "shell", "command": "npm run test:unit", "options": { "cwd": "${workspaceFolder}/api" }, "group": "test" },
-    { "label": "Web: serve on :5173", "type": "shell", "command": "npm run dev", "options": { "cwd": "${workspaceFolder}/web" }, "isBackground": true, "problemMatcher": [] }
-  ]
-}
