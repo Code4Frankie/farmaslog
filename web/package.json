@@ -1,1 +1,0 @@
-{ "name": "farmaslog-web", "private": true, "version": "1.0.0", "scripts": { "build": "node build-config.js", "dev": "python3 -m http.server 5173" } }
