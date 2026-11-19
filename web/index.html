@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FarmasLog: know the farmer before you lend</title>
+  <meta name="description" content="FarmasLog checks that a smallholder record exists, where the farm is, and how strong the evidence is.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="demo-banner" class="demo" hidden>Demo mode: not connected to the FarmasLog API. Everything below is sample data.</div>
+  <div class="shell">
+    <section class="story" aria-labelledby="headline">
+      <p class="brand">FarmasLog</p>
+      <h1 id="headline">Know the farmer before you lend.</h1>
+      <p class="lede">One check tells a bank or programme whether a smallholder record exists, where the farm is, and how strong the evidence is.</p>
+      <article class="slip" aria-label="Example verification result">
+        <header><h2>Verification result</h2><p>Sample only. Not a real farmer.</p></header>
+        <dl>
+          <div class="row"><dt>Record</dt><dd>Found</dd></div>
+          <div class="row"><dt>FarmasLog ID</dt><dd>FL-7K3M9Q2X</dd></div>
+          <div class="row"><dt>Location</dt><dd>Agwatashi, Awe LGA</dd></div>
+          <div class="row"><dt>Crop</dt><dd>Rice</dd></div>
+          <div class="row"><dt>Reported area</dt><dd>1.2 hectares</dd></div>
+          <div class="row"><dt>Evidence</dt><dd><span class="tag">Self-reported</span></dd></div>
+          <div class="row"><dt>Farm location</dt><dd>Not yet confirmed by a field agent</dd></div>
+        </dl>
+        <footer>Usable for pre-screening. A field visit raises the evidence level.</footer>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="card">
+        <div id="view-signin" data-view="signin">
+          <h2 tabindex="-1">Sign in</h2>
+          <p class="sub">For partner organisations and FarmasLog staff.</p>
+          <p id="demo-hint" class="hint" hidden>Demo login: demo@farmaslog.test with password demo-password-123</p>
+          <form id="form-signin" novalidate>
+            <label for="si-email">Work email</label>
+            <input id="si-email" name="email" type="email" autocomplete="email" required>
+            <label for="si-password">Password</label>
+            <input id="si-password" name="password" type="password" autocomplete="current-password" required>
+            <button type="submit" class="primary">Sign in</button>
+            <p class="msg" role="alert" hidden></p>
+          </form>
+          <p class="switch">New organisation? <a href="#/signup">Request access</a></p>
+        </div>
+
+        <div id="view-signup" data-view="signup" hidden>
+          <h2 tabindex="-1">Request access</h2>
+          <p class="sub">Tell us who you are. An administrator approves each organisation before sign-in works.</p>
+          <form id="form-signup" novalidate>
+            <label for="su-org">Organisation</label>
+            <input id="su-org" name="organization" type="text" autocomplete="organization" required>
+            <label for="su-type">Type of organisation</label>
+            <select id="su-type" name="type">
+              <option value="bank">Bank or lender</option>
+              <option value="programme">Agricultural programme</option>
+              <option value="insurer">Insurer</option>
+              <option value="cooperative">Cooperative</option>
+              <option value="extension">Extension service</option>
+              <option value="other">Other</option>
+            </select>
+            <label for="su-name">Your name</label>
+            <input id="su-name" name="name" type="text" autocomplete="name" required>
+            <label for="su-email">Work email</label>
+            <input id="su-email" name="email" type="email" autocomplete="email" required>
+            <label for="su-password">Password</label>
+            <input id="su-password" name="password" type="password" autocomplete="new-password" minlength="12" required aria-describedby="su-pw-help">
+            <p id="su-pw-help" class="help">At least 12 characters.</p>
+            <button type="submit" class="primary">Request access</button>
+            <p class="msg" role="alert" hidden></p>
+          </form>
+          <div id="signup-done" hidden>
+            <p class="done">Request received. An administrator will review it before you can sign in.</p>
+          </div>
+          <p class="switch">Already approved? <a href="#/signin">Sign in</a></p>
+        </div>
+
+        <div id="view-app" data-view="app" hidden>
+          <h2 tabindex="-1">Welcome, <span id="who"></span></h2>
+          <dl class="account">
+            <div><dt>Organisation</dt><dd id="org"></dd></div>
+            <div><dt>Role</dt><dd id="role"></dd></div>
+            <div id="usage-row" hidden><dt>Verified lookups this month</dt><dd id="usage"></dd></div>
+          </dl>
+          <p class="hint">API keys and a verification console arrive in the next build.</p>
+          <button id="signout" type="button" class="secondary">Sign out</button>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script src="config.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
