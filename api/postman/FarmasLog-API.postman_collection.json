@@ -2,7 +2,7 @@
   "info": {
     "name": "FarmasLog-API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Set baseUrl, then log in to fill token. Use only test keys (sk_test_...) and synthetic phone numbers."
+    "description": "Set baseUrl, then log in to fill token. Use only test keys (sk_test_...) and synthetic phone numbers. Change the state, lga and community variables to demo any area."
   },
   "variable": [
     {
@@ -16,6 +16,18 @@
     {
       "key": "apiKey",
       "value": ""
+    },
+    {
+      "key": "state",
+      "value": "Nasarawa"
+    },
+    {
+      "key": "lga",
+      "value": "Awe"
+    },
+    {
+      "key": "community",
+      "value": "Agwatashi"
     },
     {
       "key": "farmerId",
@@ -46,7 +58,7 @@
               ]
             },
             "url": {
-              "raw": "{{baseUrl}}/v1/verify?phone=08000000001&state=Benue&lga=Vandeikya",
+              "raw": "{{baseUrl}}/v1/verify?phone=08000000001&state={{state}}&lga={{lga}}",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -61,11 +73,11 @@
                 },
                 {
                   "key": "state",
-                  "value": "Benue"
+                  "value": "{{state}}"
                 },
                 {
                   "key": "lga",
-                  "value": "Vandeikya"
+                  "value": "{{lga}}"
                 }
               ]
             }
@@ -257,7 +269,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Test Farmer\",\n  \"phone\": \"08000000002\",\n  \"state\": \"Benue\",\n  \"lga\": \"Vandeikya\",\n  \"ward\": \"Ihugh\",\n  \"community\": \"Ihugh\",\n  \"consent\": {\n    \"given\": true,\n    \"wordingVersion\": \"v1\"\n  },\n  \"isSynthetic\": true,\n  \"farm\": {\n    \"crop\": \"White yam\",\n    \"reportedAreaHa\": 1.5,\n    \"location\": {\n      \"lat\": 7,\n      \"lng\": 9,\n      \"source\": \"farmer_pin\",\n      \"accuracyMeters\": 20\n    }\n  }\n}"
+              "raw": "{\n  \"name\": \"Test Farmer\",\n  \"phone\": \"08000000002\",\n  \"state\": \"{{state}}\",\n  \"lga\": \"{{lga}}\",\n  \"community\": \"{{community}}\",\n  \"consent\": {\n    \"given\": true,\n    \"wordingVersion\": \"v1\"\n  },\n  \"isSynthetic\": true,\n  \"farm\": {\n    \"crop\": \"White yam\",\n    \"reportedAreaHa\": 1.5,\n    \"location\": {\n      \"lat\": 7,\n      \"lng\": 9,\n      \"source\": \"farmer_pin\",\n      \"accuracyMeters\": 20\n    }\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1/farmers",
@@ -287,7 +299,7 @@
               ]
             },
             "url": {
-              "raw": "{{baseUrl}}/v1/farmers?state=Benue&lga=Vandeikya&limit=25",
+              "raw": "{{baseUrl}}/v1/farmers?state={{state}}&lga={{lga}}&limit=25",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -298,11 +310,11 @@
               "query": [
                 {
                   "key": "state",
-                  "value": "Benue"
+                  "value": "{{state}}"
                 },
                 {
                   "key": "lga",
-                  "value": "Vandeikya"
+                  "value": "{{lga}}"
                 },
                 {
                   "key": "limit",

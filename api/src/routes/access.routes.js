@@ -44,6 +44,16 @@ router.get('/partners', asyncHandler(async (req, res) => {
   res.json({ data: await Partner.find(filter).sort({ createdAt: -1 }) });
 }));
 
+router.post('/partners/:partnerId/reject', asyncHandler(async (req, res) => {
+  const p = req.partnerDoc;
+  if (p.status !== 'pending') throw new AppError(409, 'INVALID_STATE', 'Only a pending partner can be rejected.');
+  p.status = 'suspended';
+  await p.save();
+  await User.updateMany({ partnerId: p._id, status: 'pending' }, { status: 'disabled' });
+  await writeAudit(auditCtx(req), { action: 'partner.rejected', entityType: 'Partner', entityId: p._id });
+  res.json(p);
+}));
+
 router.post('/partners/:partnerId/approve', asyncHandler(async (req, res) => {
   const p = req.partnerDoc;
   if (p.status !== 'pending') throw new AppError(409, 'INVALID_STATE', 'Only a pending partner can be approved.');

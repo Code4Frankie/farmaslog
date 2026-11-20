@@ -10,6 +10,12 @@ import { registerFarmer, reviewFarmer } from '../src/services/farmer.service.js'
 import { createApiKey } from '../src/services/apiKey.service.js';
 
 const demo = process.argv.includes('--demo');
+// Demo area: any state/LGA. e.g. npm run seed -- --demo --state=Kano --lga=Gwale --community=Gwale --crop=Sorghum
+const arg = (n) => process.argv.find((a) => a.startsWith(`--${n}=`))?.split('=').slice(1).join('=');
+const area = {
+  state: arg('state') || process.env.DEMO_STATE || 'Nasarawa', lga: arg('lga') || process.env.DEMO_LGA || 'Awe',
+  community: arg('community') || process.env.DEMO_COMMUNITY || 'Agwatashi', crop: arg('crop') || process.env.DEMO_CROP || 'Rice',
+};
 if (demo && !env.allowSynthetic) { console.error('Refusing to seed demo data on a deployment that does not allow synthetic records.'); process.exit(1); }
 const pw = () => crypto.randomBytes(12).toString('base64url');
 
@@ -39,12 +45,13 @@ if (demo) {
   const ctx = { actor: { id: String(admin._id), role: 'super_admin' }, requestId: 'seed' };
   try {
     const { farmer } = await registerFarmer({
-      name: 'Micheal Ahile (TEST)', phone: '08000000001', state: 'Benue', lga: 'Vandeikya', ward: 'Ihugh', community: 'Ihugh',
+      name: 'Micheal Ahile (TEST)', phone: '08000000001', state: area.state, lga: area.lga, community: area.community,
       consent: { given: true, wordingVersion: 'test-v0' }, source: 'admin', isSynthetic: true,
-      farm: { crop: 'White yam', reportedAreaHa: 1.5 },
+      farm: { crop: area.crop, reportedAreaHa: 1.5 },
     }, ctx);
     await reviewFarmer(farmer, { decision: 'approve', note: 'seed' }, ctx);
-    out.push(`Synthetic farmer: ${farmer.farmaslogId}  phone 08000000001`);
+    out.push(`Synthetic farmer: ${farmer.farmaslogId}  phone 08000000001  (${farmer.community}, ${farmer.lga}, ${farmer.state})`);
+    out.push(`Try: GET /v1/verify?phone=08000000001&state=${encodeURIComponent(farmer.state)}&lga=${encodeURIComponent(farmer.lga)}`);
   } catch (e) { out.push(`Synthetic farmer skipped: ${e.message}`); }
 }
 console.log(out.join('\n'));

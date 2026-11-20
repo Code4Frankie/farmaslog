@@ -11,6 +11,6 @@ if (url && !/^(https:\/\/[^\s"'<>\\]+|http:\/\/localhost(:\d+)?)$/.test(url)) {
 const dist = path.join(__dirname, 'dist');
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist);
-for (const f of ['index.html', 'styles.css', 'app.js']) fs.copyFileSync(path.join(__dirname, f), path.join(dist, f));
+for (const f of ['index.html', 'styles.css', 'app.js', 'areas.json']) fs.copyFileSync(path.join(__dirname, f), path.join(dist, f));
 fs.writeFileSync(path.join(dist, 'config.js'), `window.FARMASLOG_CONFIG = ${JSON.stringify({ apiUrl: url })};\n`);
 console.log(url ? `Built for API: ${url}` : 'Built in DEMO mode (FARMASLOG_API_URL is not set)');

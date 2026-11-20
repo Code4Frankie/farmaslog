@@ -26,4 +26,14 @@ test('signup validates before touching the database', async () => {
   expect(r.status).toBe(400);
   expect(r.body.errorCode).toBe('VALIDATION_ERROR');
 });
+test('reference areas: any state, public, no database', async () => {
+  const all = await request(app).get('/v1/reference/areas');
+  expect(all.status).toBe(200);
+  expect(all.body.states).toHaveLength(37);
+  expect(all.body.lgaCount).toBe(774);
+  const one = await request(app).get('/v1/reference/areas').query({ state: 'nasarawa' });
+  expect(one.body).toMatchObject({ state: 'Nasarawa' });
+  expect(one.body.lgas).toContain('Awe');
+  expect((await request(app).get('/v1/reference/areas').query({ state: 'Atlantis' })).body.errorCode).toBe('STATE_NOT_FOUND');
+});
 test('swagger docs are served', async () => expect((await request(app).get('/docs/')).status).toBe(200));

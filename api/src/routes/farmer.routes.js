@@ -39,11 +39,12 @@ router.param('id', async (req, _res, next, id) => {
 });
 
 router.post('/', authorize(SUPER_ADMIN, DATA_MANAGER, FIELD_AGENT), validate(registerFarmerSchema), asyncHandler(async (req, res) => {
-  const { farmer, farm, isDuplicate, alreadyImported } = await registerFarmer(req.body, auditCtx(req));
+  const { farmer, farm, isDuplicate, alreadyImported, warnings } = await registerFarmer(req.body, auditCtx(req));
   res.status(alreadyImported ? 200 : 201).json({
     ...farmerView(farmer, farm),
     duplicateCandidate: isDuplicate,
     alreadyImported,
+    warnings: warnings ?? [],
     message: isDuplicate
       ? 'A record with this phone number already exists. This submission is held for review and no FarmasLog ID has been issued.'
       : 'Registered. The record is pending review before it can be verified by partners.',

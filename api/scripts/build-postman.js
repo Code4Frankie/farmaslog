@@ -14,14 +14,14 @@ const req = (name, method, path, { auth = 'jwt', body, query } = {}) => ({
 });
 
 const collection = {
-  info: { name: 'FarmasLog-API', schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json', description: 'Set baseUrl, then log in to fill token. Use only test keys (sk_test_...) and synthetic phone numbers.' },
+  info: { name: 'FarmasLog-API', schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json', description: 'Set baseUrl, then log in to fill token. Use only test keys (sk_test_...) and synthetic phone numbers. Change the state, lga and community variables to demo any area.' },
   variable: [
     { key: 'baseUrl', value: 'http://localhost:3000' }, { key: 'token', value: '' }, { key: 'apiKey', value: '' },
-    { key: 'farmerId', value: '' }, { key: 'partnerId', value: '' },
+    { key: 'state', value: 'Nasarawa' }, { key: 'lga', value: 'Awe' }, { key: 'community', value: 'Agwatashi' }, { key: 'farmerId', value: '' }, { key: 'partnerId', value: '' },
   ],
   item: [
     { name: 'Partner verification', item: [
-      req('Verify by phone (200/404/429)', 'GET', '/v1/verify', { auth: 'apiKey', query: 'phone=08000000001&state=Benue&lga=Vandeikya' }),
+      req('Verify by phone (200/404/429)', 'GET', '/v1/verify', { auth: 'apiKey', query: 'phone=08000000001&state={{state}}&lga={{lga}}' }),
       req('Verify by FarmasLog ID', 'GET', '/v1/verify', { auth: 'apiKey', query: 'farmaslogId=FL-00000000' }),
       req('Missing params (400)', 'GET', '/v1/verify', { auth: 'apiKey' }),
       req('No key (401)', 'GET', '/v1/verify', { auth: 'none', query: 'phone=08000000001' }),
@@ -32,8 +32,8 @@ const collection = {
       req('Me', 'GET', '/v1/auth/me'),
     ] },
     { name: 'Farmers', item: [
-      req('Register farmer (synthetic)', 'POST', '/v1/farmers', { body: { name: 'Test Farmer', phone: '08000000002', state: 'Benue', lga: 'Vandeikya', ward: 'Ihugh', community: 'Ihugh', consent: { given: true, wordingVersion: 'v1' }, isSynthetic: true, farm: { crop: 'White yam', reportedAreaHa: 1.5, location: { lat: 7.0, lng: 9.0, source: 'farmer_pin', accuracyMeters: 20 } } } }),
-      req('List farmers', 'GET', '/v1/farmers', { query: 'state=Benue&lga=Vandeikya&limit=25' }),
+      req('Register farmer (synthetic)', 'POST', '/v1/farmers', { body: { name: 'Test Farmer', phone: '08000000002', state: '{{state}}', lga: '{{lga}}', community: '{{community}}', consent: { given: true, wordingVersion: 'v1' }, isSynthetic: true, farm: { crop: 'White yam', reportedAreaHa: 1.5, location: { lat: 7.0, lng: 9.0, source: 'farmer_pin', accuracyMeters: 20 } } } }),
+      req('List farmers', 'GET', '/v1/farmers', { query: 'state={{state}}&lga={{lga}}&limit=25' }),
       req('Get farmer', 'GET', '/v1/farmers/{{farmerId}}'),
       req('Approve', 'POST', '/v1/farmers/{{farmerId}}/review', { body: { decision: 'approve' } }),
       req('Field verification', 'POST', '/v1/farmers/{{farmerId}}/field-verification', { body: { outcome: 'verified', method: 'site_visit', location: { lat: 7.0, lng: 9.0, accuracyMeters: 8 } } }),

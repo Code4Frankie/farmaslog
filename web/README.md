@@ -13,7 +13,11 @@ Plain HTML, CSS and JavaScript. No build step, no dependencies.
 3. On the API, set `CORS_ORIGINS=https://your-project.vercel.app` (comma-separate extra origins; each Vercel preview URL is a different origin).
 4. Sign-up flow: an organisation requests access, then a super admin approves it with `POST /v1/partners/{id}/approve` (list pending ones with `GET /v1/partners?status=pending`). Approved users can sign in.
 
+## Showing it for any state
+The sample verification slip on the sign-in page is fillable: type or pick any state, LGA, community and crop and the slip updates. Suggestions come from `areas.json` (all 36 states, the FCT and 774 LGAs); anything not in the list can still be typed. Keep `areas.json` identical to `api/src/data/ng-areas.json`.
+
 ## Notes
 - The sign-in token is kept in `sessionStorage` (cleared when the tab closes). Fine for a first build; revisit before real use.
 - Sign-up is for partner organisations (banks, programmes, insurers). Farmer registration stays on the separate registration form.
-- Not built yet: API-key management, a verification console, an admin approval screen, email notices, password reset.
+- Screens by role: partner (Verify, API keys, Usage), administrator (Requests, Farmers, Register, API keys, Usage), data manager (Farmers, Register), field agent (Register, Farmers), finance and auditor (Usage, Farmers). In demo mode only sign-in and sign-up work.
+- Not built yet: evidence-file upload, enrichment trigger, farmer edit, audit and request logs, team/user creation, key rotation, email notices, password reset.

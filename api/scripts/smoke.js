@@ -24,7 +24,12 @@ const stop = (msg) => { console.error(`\nStopping: ${msg}`); process.exit(1); };
 const tag = Date.now().toString(36);
 const pw = () => crypto.randomBytes(12).toString('base64url');
 const phone = `0800${String(crypto.randomInt(0, 10_000_000)).padStart(7, '0')}`; // synthetic test number
-console.log(`Smoke test against ${BASE}\n`);
+// Any area works: SMOKE_STATE=Kano SMOKE_LGA=Gwale SMOKE_COMMUNITY=Gwale
+const area = { state: process.env.SMOKE_STATE || 'Nasarawa', lga: process.env.SMOKE_LGA || 'Awe', community: process.env.SMOKE_COMMUNITY || 'Agwatashi' };
+console.log(`Smoke test against ${BASE} (area: ${area.community}, ${area.lga}, ${area.state})\n`);
+const refs = await call('GET', '/v1/reference/areas', { query: { state: area.state } });
+if (refs.status !== 200) console.log(`NOTE  '${area.state}' is not in the reference list; it will be stored as typed`);
+const otherLga = (refs.body?.lgas || []).find((l) => l.toLowerCase() !== area.lga.toLowerCase()) || 'Nowhere';
 
 check('health endpoint', (await call('GET', '/health')).status === 200);
 const login = await call('POST', '/v1/auth/login', { body: { email: adminEmail, password: adminPassword } });
@@ -46,7 +51,7 @@ const mkUser = async (role) => {
 const agent = await mkUser('field_agent'); const manager = await mkUser('data_manager');
 if (!check('create + sign in field agent and data manager', agent && manager)) stop('cannot create staff users');
 
-const reg = (name) => ({ name, phone, state: 'Benue', lga: 'Vandeikya', ward: 'Ihugh', community: 'Ihugh', consent: { given: true, wordingVersion: 'smoke-v1' }, isSynthetic: true, farm: { crop: 'White Yam', reportedAreaHa: 1.5, location: { lat: 7.05, lng: 9.0, source: 'farmer_pin', accuracyMeters: 25 } } });
+const reg = (name) => ({ name, phone, state: area.state, lga: area.lga, community: area.community, consent: { given: true, wordingVersion: 'smoke-v1' }, isSynthetic: true, farm: { crop: 'White Yam', reportedAreaHa: 1.5, location: { lat: 7.05, lng: 9.0, source: 'farmer_pin', accuracyMeters: 25 } } });
 const farmer = await call('POST', '/v1/farmers', { token: agent, body: reg(`Smoke Farmer ${tag}`) });
 if (!check('register synthetic farmer (pending review, FarmasLog ID issued)', farmer.status === 201 && farmer.body?.status === 'pending_review' && /^FL-/.test(farmer.body?.farmaslogId || ''), `${farmer.status} ${JSON.stringify(farmer.body)}`)) stop('registration failed (is ALLOW_SYNTHETIC enabled on this deployment?)');
 const { id, farmaslogId } = farmer.body;
@@ -58,12 +63,12 @@ check('partner cannot see a pending record (404)', (await call('GET', '/v1/verif
 check('field agent cannot approve (403)', (await call('POST', `/v1/farmers/${id}/review`, { token: agent, body: { decision: 'approve' } })).status === 403);
 check('data manager approves', (await call('POST', `/v1/farmers/${id}/review`, { token: manager, body: { decision: 'approve' } })).status === 200);
 
-const v1 = await call('GET', '/v1/verify', { key: apiKey, query: { phone, state: 'Benue', lga: 'Vandeikya' } });
+const v1 = await call('GET', '/v1/verify', { key: apiKey, query: { phone, state: area.state, lga: area.lga } });
 check('verify by phone: record_found + self_reported evidence', v1.status === 200 && v1.body?.verificationStatus === 'record_found' && v1.body?.evidenceStatus === 'self_reported', JSON.stringify(v1.body));
 check('response says the GPS is unconfirmed, but the record is still usable', v1.body?.locationConfirmation === 'unconfirmed' && v1.body?.limitations?.includes('location_not_confirmed_by_field_agent'), JSON.stringify(v1.body));
 check('verify response hides phone and coordinates', !JSON.stringify(v1.body).includes(phone.slice(1)) && !v1.body?.location?.coordinates);
 check('verify by FarmasLog ID', (await call('GET', '/v1/verify', { key: apiKey, query: { farmaslogId } })).status === 200);
-check('wrong LGA is a 404', (await call('GET', '/v1/verify', { key: apiKey, query: { phone, lga: 'Gboko' } })).status === 404);
+check('wrong LGA is a 404', (await call('GET', '/v1/verify', { key: apiKey, query: { phone, lga: otherLga } })).status === 404);
 
 const fv = await call('POST', `/v1/farmers/${id}/field-verification`, { token: agent, body: { outcome: 'verified', method: 'site_visit', location: { lat: 7.05, lng: 9.0, accuracyMeters: 6 } } });
 check('field verification recorded', fv.status === 200, JSON.stringify(fv.body));

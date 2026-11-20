@@ -1,6 +1,6 @@
 import { normalizeNigerianPhone } from '../utils/phone.js';
 import { titleCase } from '../utils/text.js';
-import { matchState, matchBenueLga } from '../data/ng-geo.js';
+import { matchState, matchLga, lgasFor } from '../data/ng-geo.js';
 import { NIGERIA_BBOX as B } from '../config/constants.js';
 
 // Maps one row of the farmaslog-qservers CSV export to the API's registration shape.
@@ -50,8 +50,8 @@ export function mapWebformRow(row, { consentVersion = DEFAULT_CONSENT_VERSION } 
 
   let lga = safeText(row.lgaName, 80);
   if (!lga) errors.push('MISSING_lgaName');
-  else if (state === 'Benue') {
-    const m = matchBenueLga(lga);
+  else if (state && lgasFor(state)) {
+    const m = matchLga(state, lga);
     if (!m) errors.push('UNKNOWN_LGA');
     else { if (m.corrected) warnings.push(`lga_corrected:${lga}->${m.name}`); lga = m.name; }
   } else if (state) warnings.push('lga_not_validated');

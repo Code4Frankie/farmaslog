@@ -14,6 +14,8 @@ import farmerRoutes from './routes/farmer.routes.js';
 import accessRoutes from './routes/access.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import webhookRoutes from './routes/webhook.routes.js';
+import referenceRoutes from './routes/reference.routes.js';
+import meRoutes from './routes/me.routes.js';
 import { openapi } from './docs/openapi.js';
 
 export function createApp() {
@@ -44,6 +46,8 @@ export function createApp() {
 
   app.use('/v1/auth', authRoutes);
   app.use('/v1/verify', verifyRoutes);
+  app.use('/v1/reference', referenceRoutes);
+  app.use('/v1/me', meRoutes);
   app.use('/v1/farmers', farmerRoutes);
   app.use('/v1', accessRoutes);
   app.use('/v1', adminRoutes);

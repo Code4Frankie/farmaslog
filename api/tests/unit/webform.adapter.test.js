@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { mapWebformRow, missingColumns, ACRES_TO_HA, WEBFORM_COLUMNS, DEFAULT_CONSENT_VERSION } from '../../src/services/webform.adapter.js';
 import { readObjects, toCsv, parseCsv } from '../../src/utils/csv.js';
 import { registerFarmerSchema } from '../../src/validators/index.js';
-import { matchBenueLga, matchState, BENUE_LGAS } from '../../src/data/ng-geo.js';
+import { matchLga, matchState, AREAS } from '../../src/data/ng-geo.js';
 
 const { header, rows } = readObjects(fs.readFileSync(new URL('../fixtures/webform_sample.csv', import.meta.url), 'utf8'));
 const byName = (last) => mapWebformRow(rows.find((r) => r.lastName === last));
@@ -72,10 +72,15 @@ describe('field mapping', () => {
     expect(r.value.name).not.toMatch(/^[=+\-@]/);
     expect(r.warnings).toContain('name_had_formula_characters_removed');
   });
-  test('other states are accepted but the LGA is flagged unvalidated', () => {
+  test('any state works: an LGA in another state is validated against the national list', () => {
     const r = byName('Farmer Twelve');
-    expect(r.value.state).toBe('Plateau');
-    expect(r.warnings).toContain('lga_not_validated');
+    expect(r.value).toMatchObject({ state: 'Plateau', lga: 'Jos North' });
+    expect(r.warnings).not.toContain('lga_not_validated');
+  });
+  test('other states: typos are corrected, unknown LGAs are rejected', () => {
+    expect(mapWebformRow({ ...good, stateName: 'lagos', lgaName: 'Ikejaa' }).value).toMatchObject({ state: 'Lagos', lga: 'Ikeja' });
+    expect(mapWebformRow({ ...good, stateName: 'Kano', lgaName: 'Springfield' }).errors).toContain('UNKNOWN_LGA');
+    expect(mapWebformRow({ ...good, stateName: 'Nasarawa', lgaName: 'Awee', wardOrCommunity: 'Agwatashi' }).value).toMatchObject({ state: 'Nasarawa', lga: 'Awe' });
   });
   test('unusually large area is a warning', () => expect(byName('Farmer Fourteen').warnings).toContain('area_unusually_large_for_smallholder'));
 });
@@ -104,9 +109,9 @@ describe('edge cases', () => {
 
 describe('reference data and csv helpers', () => {
   test('Benue has 23 LGAs; ties are not auto-corrected', () => {
-    expect(BENUE_LGAS).toHaveLength(23);
-    expect(matchBenueLga('gwer')).toBeNull();
-    expect(matchBenueLga('Makurdi.')).toMatchObject({ name: 'Makurdi' });
+    expect(AREAS.Benue).toHaveLength(23);
+    expect(matchLga('Benue', 'gwer')).toBeNull();
+    expect(matchLga('Benue', 'Makurdi.')).toMatchObject({ name: 'Makurdi' });
     expect(matchState('Benu')).toMatchObject({ name: 'Benue', corrected: true });
     expect(matchState('Federal Capital Territory').name).toBe('FCT');
   });

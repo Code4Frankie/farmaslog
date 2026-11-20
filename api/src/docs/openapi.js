@@ -43,6 +43,20 @@ export const openapi = {
         responses: { 200: { description: 'JWT issued' }, 401: err('Invalid credentials') },
       },
     },
+    '/v1/reference/areas': {
+      get: {
+        tags: ['Reference'], summary: 'Nigerian states and LGAs (public) for dropdowns and suggestions',
+        description: 'Without parameters returns every state with its LGAs. With `state` returns that state only. Any area may still be entered by hand.',
+        parameters: [{ name: 'state', in: 'query', schema: { type: 'string' }, example: 'Nasarawa' }],
+        responses: { 200: { description: 'States / LGAs' }, 404: err('Unknown state') },
+      },
+    },
+    '/v1/me/api-keys': {
+      get: { tags: ['Partners & keys'], summary: 'Your organisation\'s keys (partner users)', security: bearerJwt, responses: { 200: { description: 'Keys (prefix only)' } } },
+      post: { tags: ['Partners & keys'], summary: 'Create a test-mode key for your organisation (max 5 active; shown once)', security: bearerJwt, responses: { 201: { description: 'Created' }, 409: err('Key limit reached') } },
+    },
+    '/v1/me/api-keys/{id}/revoke': { post: { tags: ['Partners & keys'], summary: 'Revoke one of your keys', security: bearerJwt, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Revoked' } } } },
+    '/v1/partners/{partnerId}/reject': { post: { tags: ['Partners & keys'], summary: 'Reject a pending partner (super admin)', security: bearerJwt, parameters: [{ name: 'partnerId', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Rejected' } } } },
     '/v1/auth/signup': {
       post: {
         tags: ['Auth'], summary: 'Request access for an organisation (bank, programme, insurer...)',

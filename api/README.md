@@ -16,7 +16,7 @@ Try the partner call with the key the seed printed:
 
 ```bash
 curl -H "Authorization: Bearer sk_test_..." \
-  "http://localhost:3000/v1/verify?phone=08000000001&state=Benue&lga=Vandeikya"
+  "http://localhost:3000/v1/verify?phone=08000000001&state=Nasarawa&lga=Awe"
 ```
 
 ## Testing the API
@@ -70,6 +70,14 @@ node scripts/import-webform.js export.csv                       # import; record
 | FR-08 Paystack | `routes/webhook.routes.js`, `services/paystack.service.js`: raw-body HMAC-SHA512, event-ID idempotency, server-side verify, retry-safe |
 | FR-09 docs | `/docs` (OpenAPI), `npm run postman` -> `postman/` |
 | Section 9 security | hashed API keys (shown once, rotate/revoke), per-key and per-IP limits, Joi, helmet, audit log, no phone numbers in logs |
+
+## Any state or LGA
+
+Nothing is tied to one pilot area. `src/data/ng-areas.json` holds all 36 states, the FCT and 774 LGAs (checked against the official per-state counts by a unit test).
+- Staff can register farmers anywhere. Names that match the list are tidied (`nasarawa` becomes `Nasarawa`); anything else is accepted as typed and the response carries a warning.
+- The CSV importers correct one-letter typos in LGA names, per state, and reject unknown LGAs with a reason.
+- `GET /v1/reference/areas` (public) returns the list, or one state with `?state=`.
+- Demo any area: `npm run seed -- --demo --state=Kano --lga=Gwale --community=Gwale --crop=Sorghum`, and `SMOKE_STATE=... SMOKE_LGA=... npm run smoke`. The Postman collection has `state`, `lga` and `community` variables.
 
 ## Partner sign-up and approval
 

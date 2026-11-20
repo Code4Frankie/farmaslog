@@ -113,12 +113,12 @@ curl -s -X POST $API/v1/partners/$PID/approve -H "Authorization: Bearer $TOKEN" 
 curl -s -X POST $API/v1/partners/$PID/api-keys -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' -d '{"name":"demo key","mode":"test","plan":"free"}' | jq -r .apiKey
 ```
-To have a record to verify, load the synthetic demo farmer from your laptop (it writes to the same Atlas database):
+To have a record to verify, load the synthetic demo farmer from your laptop (it writes to the same Atlas database). It defaults to Awe, Nasarawa, but **any area works**: add e.g. `-- --state=Kano --lga=Gwale --community=Gwale --crop=Sorghum` to demo another state:
 ```bash
 cd farmaslog/api
 MONGODB_URI='your-atlas-string' npm run seed -- --demo     # prints demo logins and a test API key once
 KEY=PASTE_THE_API_KEY
-curl -s "$API/v1/verify?phone=08000000001&state=Benue&lga=Vandeikya" -H "Authorization: Bearer $KEY" | jq
+curl -s "$API/v1/verify?phone=08000000001&state=Nasarawa&lga=Awe" -H "Authorization: Bearer $KEY" | jq
 ```
 The seed's farmer is synthetic ("Micheal Ahile (TEST)") and is labelled `synthetic: true` in the response.
 

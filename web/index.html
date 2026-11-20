@@ -14,13 +14,22 @@
       <p class="brand">FarmasLog</p>
       <h1 id="headline">Know the farmer before you lend.</h1>
       <p class="lede">One check tells a bank or programme whether a smallholder record exists, where the farm is, and how strong the evidence is.</p>
+      <div class="area" role="group" aria-labelledby="area-title">
+        <h2 id="area-title">Show it for any area</h2>
+        <div class="area-grid">
+          <div><label for="ar-state">State</label><input id="ar-state" list="state-list" autocomplete="off"><datalist id="state-list"></datalist></div>
+          <div><label for="ar-lga">Local government area</label><input id="ar-lga" list="lga-list" autocomplete="off"><datalist id="lga-list"></datalist></div>
+          <div><label for="ar-community">Community</label><input id="ar-community" autocomplete="off"></div>
+          <div><label for="ar-crop">Main crop</label><input id="ar-crop" autocomplete="off"></div>
+        </div>
+      </div>
       <article class="slip" aria-label="Example verification result">
         <header><h2>Verification result</h2><p>Sample only. Not a real farmer.</p></header>
         <dl>
           <div class="row"><dt>Record</dt><dd>Found</dd></div>
           <div class="row"><dt>FarmasLog ID</dt><dd>FL-7K3M9Q2X</dd></div>
-          <div class="row"><dt>Location</dt><dd>Agwatashi, Awe LGA</dd></div>
-          <div class="row"><dt>Crop</dt><dd>Rice</dd></div>
+          <div class="row"><dt>Location</dt><dd id="slip-location">Agwatashi, Awe LGA, Nasarawa</dd></div>
+          <div class="row"><dt>Crop</dt><dd id="slip-crop">Rice</dd></div>
           <div class="row"><dt>Reported area</dt><dd>1.2 hectares</dd></div>
           <div class="row"><dt>Evidence</dt><dd><span class="tag">Self-reported</span></dd></div>
           <div class="row"><dt>Farm location</dt><dd>Not yet confirmed by a field agent</dd></div>
@@ -78,14 +87,13 @@
         </div>
 
         <div id="view-app" data-view="app" hidden>
-          <h2 tabindex="-1">Welcome, <span id="who"></span></h2>
-          <dl class="account">
-            <div><dt>Organisation</dt><dd id="org"></dd></div>
-            <div><dt>Role</dt><dd id="role"></dd></div>
-            <div id="usage-row" hidden><dt>Verified lookups this month</dt><dd id="usage"></dd></div>
-          </dl>
-          <p class="hint">API keys and a verification console arrive in the next build.</p>
-          <button id="signout" type="button" class="secondary">Sign out</button>
+          <header class="bar">
+            <p><strong id="org"></strong> <span id="role" class="muted"></span></p>
+            <button id="signout" type="button" class="secondary">Sign out</button>
+          </header>
+          <nav id="tabs" aria-label="Sections"></nav>
+          <h2 id="screen-title" tabindex="-1"></h2>
+          <div id="screen"></div>
         </div>
       </div>
     </section>

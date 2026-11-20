@@ -6,6 +6,7 @@ import { normalizeNigerianPhone } from '../utils/phone.js';
 import { generateFarmaslogId } from '../utils/ids.js';
 import { assessEvidence } from './evidence.service.js';
 import { writeAudit } from './audit.service.js';
+import { canonicalArea } from '../data/ng-geo.js';
 
 async function allocateFarmaslogId() {
   for (let i = 0; i < 5; i++) {
@@ -33,6 +34,7 @@ export async function registerFarmer(input, ctx) {
   }
   const phone = normalizeNigerianPhone(input.phone);
   if (!phone) throw new AppError(400, 'INVALID_PHONE', 'Enter a valid Nigerian mobile number.');
+  const area = canonicalArea(input.state, input.lga); // any state/LGA is accepted; names matching the national list are tidied
 
   // Duplicate candidates are flagged for human review. Nothing is merged or overwritten silently.
   const candidate = await Farmer.exists({ phoneNormalized: phone, status: { $in: ['active', 'pending_review'] } });
@@ -41,7 +43,7 @@ export async function registerFarmer(input, ctx) {
   const farmer = await Farmer.create({
     farmaslogId: isDuplicate ? undefined : await allocateFarmaslogId(),
     name: input.name, phoneNormalized: phone,
-    state: input.state, lga: input.lga, ward: input.ward || undefined, community: input.community || undefined,
+    state: area.state, lga: area.lga, ward: input.ward || undefined, community: input.community || undefined,
     consent: { ...input.consent, capturedAt: input.submittedAt || new Date() },
     source: input.source || 'field_agent',
     status: isDuplicate ? 'duplicate_review' : 'pending_review',
@@ -70,7 +72,7 @@ export async function registerFarmer(input, ctx) {
   }
 
   await writeAudit(ctx, { action: 'farmer.registered', entityType: 'Farmer', entityId: farmer._id, changes: { status: farmer.status, source: farmer.source, duplicateCandidate: isDuplicate } });
-  return { farmer, farm, isDuplicate, alreadyImported: false };
+  return { farmer, farm, isDuplicate, alreadyImported: false, warnings: area.warnings };
 }
 
 const PII = new Set(['name', 'phone', 'location']);
@@ -79,6 +81,11 @@ const redact = (changes) => Object.fromEntries(Object.entries(changes).map(([k, 
 export async function updateFarmer(farmer, input, ctx) {
   const farm = await Farm.findOne({ farmerId: farmer._id });
   const changes = {};
+  if (input.state !== undefined || input.lga !== undefined) {
+    const a = canonicalArea(input.state ?? farmer.state, input.lga ?? farmer.lga);
+    if (input.state !== undefined) input.state = a.state;
+    if (input.lga !== undefined) input.lga = a.lga;
+  }
   for (const k of ['name', 'state', 'lga', 'ward', 'community']) {
     if (input[k] !== undefined && String(farmer[k] ?? '') !== String(input[k] ?? '')) {
       changes[k] = { from: farmer[k], to: input[k] };
