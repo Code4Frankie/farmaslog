@@ -7,6 +7,9 @@ export const ROLES = Object.freeze({
   AUDITOR: 'auditor',
 });
 export const ROLE_LIST = Object.values(ROLES);
+// FarmasLog's own team. A super admin can onboard these from the dashboard; partner users sign up themselves.
+export const STAFF_ROLES = Object.freeze([ROLES.SUPER_ADMIN, ROLES.DATA_MANAGER, ROLES.FIELD_AGENT, ROLES.FINANCE, ROLES.AUDITOR]);
+export const ONBOARDABLE_ROLES = Object.freeze([ROLES.DATA_MANAGER, ROLES.FIELD_AGENT, ROLES.FINANCE, ROLES.AUDITOR]);
 
 export const PLANS = ['free', 'payg', 'growth', 'enterprise'];
 // Requests/minute per API key (PRD section 9: Starter 60, Business 300). Overridable per key.

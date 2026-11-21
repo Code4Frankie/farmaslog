@@ -8,6 +8,7 @@ const userSchema = new mongoose.Schema(
     passwordHash: { type: String, required: true, select: false },
     role: { type: String, enum: ROLE_LIST, required: true },
     partnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Partner' },
+    mustChangePassword: { type: Boolean, default: false },
     status: { type: String, enum: ['active', 'disabled', 'pending'], default: 'active' },
   },
   { timestamps: true },

@@ -1,6 +1,6 @@
 import Joi from 'joi';
 import { FARMASLOG_ID_RE } from '../utils/ids.js';
-import { LOCATION_SOURCE, PLANS, ROLE_LIST, SCOPE_LIST, FARMER_STATUS, NIGERIA_BBOX as B } from '../config/constants.js';
+import { LOCATION_SOURCE, ONBOARDABLE_ROLES, PLANS, ROLE_LIST, SCOPE_LIST, FARMER_STATUS, NIGERIA_BBOX as B } from '../config/constants.js';
 
 const id24 = Joi.string().hex().length(24);
 
@@ -118,4 +118,17 @@ export const logListSchema = Joi.object({
   partnerId: id24, from: Joi.date().iso(), to: Joi.date().iso(),
   result: Joi.string(), action: Joi.string(), entityType: Joi.string(),
   page: Joi.number().integer().min(1).default(1), limit: Joi.number().integer().min(1).max(200).default(50),
+});
+
+export const createStaffSchema = Joi.object({
+  name: Joi.string().trim().min(2).max(120).required(),
+  email: Joi.string().email({ tlds: { allow: false } }).required(),
+  role: Joi.string().valid(...ONBOARDABLE_ROLES).required(),
+});
+
+export const staffStatusSchema = Joi.object({ status: Joi.string().valid('active', 'disabled').required() });
+
+export const changePasswordSchema = Joi.object({
+  currentPassword: Joi.string().max(200).required(),
+  newPassword: Joi.string().min(12).max(200).required(),
 });

@@ -5,11 +5,12 @@ const DEMO_LOGIN = { email: 'demo@farmaslog.test', password: 'demo-password-123'
 const DEMO_USER = { name: 'Demo Lender', role: 'partner_verifier', organization: 'Demo Agri Bank' };
 const ROLES = { super_admin: 'Administrator', data_manager: 'Data manager', field_agent: 'Field agent', partner_verifier: 'Partner', finance: 'Finance', auditor: 'Auditor' };
 const TABS = {
-  partner_verifier: ['console', 'keys', 'usage'], super_admin: ['approvals', 'farmers', 'register', 'keys', 'usage'],
-  data_manager: ['farmers', 'register'], field_agent: ['register', 'farmers'], finance: ['usage'], auditor: ['usage', 'farmers'],
+  partner_verifier: ['console', 'keys', 'usage', 'password'], super_admin: ['approvals', 'farmers', 'register', 'team', 'keys', 'usage', 'password'],
+  data_manager: ['farmers', 'register', 'password'], field_agent: ['register', 'farmers', 'password'], finance: ['usage', 'password'], auditor: ['usage', 'farmers', 'password'],
 };
-const TITLES = { console: 'Verify a farmer', keys: 'API keys', usage: 'Usage', approvals: 'Access requests', farmers: 'Farmers', register: 'Register a farmer' };
-const TAB = { console: 'Verify', keys: 'API keys', usage: 'Usage', approvals: 'Requests', farmers: 'Farmers', register: 'Register' };
+const TITLES = { console: 'Verify a farmer', keys: 'API keys', usage: 'Usage', approvals: 'Access requests', farmers: 'Farmers', register: 'Register a farmer', team: 'FarmasLog team', password: 'Change your password' };
+const TAB = { console: 'Verify', keys: 'API keys', usage: 'Usage', approvals: 'Requests', farmers: 'Farmers', register: 'Register', team: 'Team', password: 'Password' };
+const ONBOARD = [['field_agent', 'Field agent'], ['data_manager', 'Data manager'], ['finance', 'Finance'], ['auditor', 'Auditor']];
 
 const $ = (s) => document.querySelector(s);
 const h = (tag, attrs = {}, ...kids) => {
@@ -60,7 +61,11 @@ async function demoApi(path, body, token) {
 // Signed-in calls: an expired session sends the person back to sign in.
 async function call(path, opts = {}) {
   try { return await api(path, { token: session.token, ...opts }); }
-  catch (e) { if (e.status === 401 && ['INVALID_TOKEN', 'UNAUTHENTICATED'].includes(e.code)) signOut(); throw e; }
+  catch (e) {
+    if (e.status === 401 && ['INVALID_TOKEN', 'UNAUTHENTICATED'].includes(e.code)) signOut();
+    if (e.code === 'PASSWORD_CHANGE_REQUIRED' && user && !user.mustChangePassword) enter({ ...user, mustChangePassword: true });
+    throw e;
+  }
 }
 
 // ---- areas: suggestions for any state/LGA; anything else can still be typed ----
@@ -97,7 +102,25 @@ const areasReady = initArea();
 
 // ---- small UI helpers ----
 const note = (text, kind = 'error') => h('p', { class: `msg ${kind === 'ok' ? 'ok' : kind === 'info' ? 'info' : ''}`, role: kind === 'error' ? 'alert' : 'status' }, text);
-const field = (label, input, help) => h('div', { class: 'f' }, h('label', { for: input.id }, label), input, help && h('p', { class: 'help' }, help));
+// Show/hide control for a password input. Wraps the input in place and returns the wrapper (use it wherever the input would go).
+const EYE = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYE_OFF = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M17.94 17.94A10.9 10.9 0 0 1 12 19c-7 0-11-7-11-7a19.8 19.8 0 0 1 5.06-5.94M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 7 11 7a19.9 19.9 0 0 1-3.17 4.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>';
+function eye(input) {
+  const wrap = h('span', { class: 'pw' });
+  const btn = h('button', { type: 'button', class: 'eye', 'aria-label': 'Show password', 'aria-pressed': 'false' });
+  btn.innerHTML = EYE;
+  btn.addEventListener('click', () => {
+    const showing = input.type === 'password';
+    input.type = showing ? 'text' : 'password';
+    btn.innerHTML = showing ? EYE_OFF : EYE;
+    btn.setAttribute('aria-label', showing ? 'Hide password' : 'Show password');
+    btn.setAttribute('aria-pressed', String(showing));
+  });
+  input.parentNode?.insertBefore(wrap, input);
+  wrap.append(input, btn);
+  return wrap;
+}
+const field = (label, input, help) => h('div', { class: 'f' }, h('label', { for: input.id || input.querySelector('input')?.id }, label), input, help && h('p', { class: 'help' }, help));
 const table = (head, rows) => h('div', { class: 'tablewrap' }, h('table', {}, h('thead', {}, h('tr', {}, head.map((t) => h('th', {}, t)))), h('tbody', {}, rows.map((r) => h('tr', {}, r.map((c) => h('td', {}, c)))))));
 const fail = (e) => note(e.details?.length ? `${e.message} ${e.details.join('; ')}` : `${e.message}${e.code && e.code !== 'ERROR' ? ` (${e.code})` : ''}`);
 const getPos = () => new Promise((resolve) => {
@@ -143,7 +166,7 @@ SCREENS.console = (el) => {
         try { out.append(resultCard(await api(`/v1/verify?${new URLSearchParams(q)}`, { token: lastKey }))); } catch (err) { out.append(fail(err)); }
       },
     },
-    field('API key', key, 'A test key from the API keys tab. Kept in memory only.'), field('Phone or FarmasLog ID', id),
+    field('API key', eye(key), 'A test key from the API keys tab. Kept in memory only.'), field('Phone or FarmasLog ID', id),
     field('State (optional)', a.state), field('LGA (optional)', a.lga), ...a.lists,
     h('div', { class: 'wide' }, h('button', { class: 'primary', type: 'submit' }, 'Check'))),
     out);
@@ -281,10 +304,83 @@ SCREENS.register = (el) => {
   el.append(form, out);
 };
 
+// ---- team: the administrator onboards FarmasLog staff (field agents and others) ----
+const copy = (text) => navigator.clipboard?.writeText(text);
+SCREENS.team = async (el) => {
+  const msg = h('div', { 'aria-live': 'polite' }); const box = h('div');
+  const name = h('input', { id: 't-name', required: true, minlength: 2, maxlength: 120, autocomplete: 'off' });
+  const email = h('input', { id: 't-email', type: 'email', required: true, autocomplete: 'off' });
+  const role = h('select', { id: 't-role' }, ONBOARD.map(([v, t]) => h('option', { value: v }, t)));
+  const reveal = (r, heading) => {
+    const details = `FarmasLog sign-in: ${location.origin}\nEmail: ${r.email}\nTemporary password: ${r.temporaryPassword}\nYou will be asked to choose your own password the first time you sign in.`;
+    msg.replaceChildren(h('div', { class: 'newkey', role: 'status' }, heading,
+      h('dl', { class: 'cred' }, h('dt', {}, 'Email'), h('dd', {}, r.email), h('dt', {}, 'Temporary password'), h('dd', {}, h('code', {}, r.temporaryPassword))),
+      h('p', { class: 'help' }, 'Share this privately. It is shown once. They must choose their own password at first sign-in.'),
+      h('div', { class: 'btns' }, h('button', { class: 'secondary', type: 'button', onclick: () => copy(details) }, 'Copy sign-in details'))));
+  };
+  const act = async (path, body, after) => {
+    try { const r = await call(path, { method: 'POST', body }); after?.(r); await load(); } catch (e) { msg.replaceChildren(fail(e)); }
+  };
+  const load = async () => {
+    const r = await call('/v1/staff');
+    box.replaceChildren(r.data.length ? table(['Name', 'Email', 'Role', 'Status', ''], r.data.map((u) => {
+      const own = u.id === user.id; const locked = own || u.role === 'super_admin';
+      return [u.name, u.email, ROLES[u.role] || u.role,
+        h('span', {}, h('span', { class: `badge${u.status === 'disabled' ? ' off' : ''}` }, u.status === 'disabled' ? 'Disabled' : 'Active'), u.mustChangePassword ? [' ', h('span', { class: 'badge warn' }, 'Has not set a password yet')] : null),
+        locked ? '' : h('div', { class: 'btns' },
+          h('button', { type: 'button', class: 'secondary', onclick: () => { if (confirm(`Issue a new temporary password for ${u.name}? Their current password will stop working.`)) act(`/v1/staff/${u.id}/reset-password`, undefined, (x) => reveal(x, `New temporary password for ${u.name}.`)); } }, 'Reset password'),
+          u.status === 'disabled'
+            ? h('button', { type: 'button', class: 'secondary', onclick: () => act(`/v1/staff/${u.id}/status`, { status: 'active' }, () => msg.replaceChildren(note(`${u.name} can sign in again.`, 'ok'))) }, 'Enable')
+            : h('button', { type: 'button', class: 'secondary', onclick: () => { if (confirm(`Disable ${u.name}? They will not be able to sign in.`)) act(`/v1/staff/${u.id}/status`, { status: 'disabled' }, () => msg.replaceChildren(note(`${u.name} is disabled.`, 'ok'))); } }, 'Disable')),
+      ];
+    })) : note('No team members yet.', 'info'));
+  };
+  el.append(
+    h('p', { class: 'sub' }, 'Add field agents and other FarmasLog staff. Each person gets a one-time temporary password and must choose their own before doing anything else.'),
+    h('form', {
+      class: 'grid',
+      onsubmit: async (e) => {
+        e.preventDefault(); msg.replaceChildren();
+        try {
+          const r = await call('/v1/staff', { method: 'POST', body: { name: name.value.trim(), email: email.value.trim(), role: role.value } });
+          reveal(r, `${r.name} has been added as ${ROLES[r.role] || r.role}.`); name.value = ''; email.value = ''; await load();
+        } catch (err) { msg.replaceChildren(fail(err)); }
+      },
+    }, field('Full name', name), field('Email', email), field('Role', role),
+    h('div', { class: 'wide' }, h('button', { class: 'primary', type: 'submit' }, 'Add team member'))),
+    msg, h('h3', {}, 'Your team'), box);
+  await load();
+};
+
+// ---- password: everyone can change their own; a new team member is sent here first ----
+SCREENS.password = (el) => {
+  const forced = Boolean(user.mustChangePassword);
+  const cur = h('input', { id: 'p-cur', type: 'password', autocomplete: 'current-password', required: true });
+  const next = h('input', { id: 'p-new', type: 'password', autocomplete: 'new-password', minlength: 12, required: true });
+  const again = h('input', { id: 'p-again', type: 'password', autocomplete: 'new-password', minlength: 12, required: true });
+  const out = h('div', { 'aria-live': 'polite' });
+  const form = h('form', {
+    onsubmit: async (e) => {
+      e.preventDefault(); out.replaceChildren();
+      if (next.value !== again.value) return out.append(note('The two new passwords do not match.'));
+      try {
+        const r = await call('/v1/auth/change-password', { method: 'POST', body: { currentPassword: cur.value, newPassword: next.value } });
+        if (forced) return await enter(r.user);
+        user.mustChangePassword = false; form.reset(); out.append(note('Password updated.', 'ok'));
+      } catch (err) { out.append(fail(err)); }
+    },
+  }, field(forced ? 'Temporary password' : 'Current password', eye(cur), forced ? 'The one your administrator gave you.' : null),
+  field('New password', eye(next), 'At least 12 characters.'), field('Repeat new password', eye(again)),
+  h('div', { class: 'btns' }, h('button', { class: 'primary', type: 'submit' }, 'Update password')));
+  if (forced) el.append(note(`Welcome, ${user.name}. Choose your own password to continue.`, 'info'));
+  el.append(form, out);
+};
+
 // ---- shell: sign in / sign up / signed-in app ----
 function show(name) {
   for (const e of document.querySelectorAll('[data-view]')) e.hidden = e.dataset.view !== name;
   $('.shell').classList.toggle('app', name === 'app');
+  document.body.classList.toggle('in-app', name === 'app');
   document.querySelector(`[data-view="${name}"] h2`)?.focus({ preventScroll: true });
 }
 function route() { show(user ? 'app' : location.hash === '#/signup' ? 'signup' : 'signin'); }
@@ -301,7 +397,7 @@ async function enter(u) {
   user = u;
   $('#org').textContent = `${u.name}${u.organization ? `, ${u.organization}` : ''}`;
   $('#role').textContent = ROLES[u.role] || u.role;
-  const tabs = TABS[u.role] || [];
+  const tabs = u.mustChangePassword ? ['password'] : TABS[u.role] || [];
   $('#tabs').replaceChildren(...tabs.map((t) => h('button', { type: 'button', 'data-tab': t, onclick: () => openScreen(t) }, TAB[t])));
   show('app');
   if (tabs.length) await openScreen(tabs[0]);
@@ -324,6 +420,7 @@ function bind(form, handler) {
     finally { button.disabled = false; button.textContent = label; }
   });
 }
+for (const input of document.querySelectorAll('#form-signin input[type=password], #form-signup input[type=password]')) eye(input);
 bind($('#form-signin'), async ({ email, password }) => {
   const r = await api('/v1/auth/login', { method: 'POST', body: { email: email.trim(), password } });
   session.save(r.token); await enter(r.user); location.hash = '#/app';

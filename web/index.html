@@ -5,15 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>FarmasLog: know the farmer before you lend</title>
   <meta name="description" content="FarmasLog checks that a smallholder record exists, where the farm is, and how strong the evidence is.">
+  <link rel="icon" href="brand/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="brand/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="brand/favicon-192.png">
+  <link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
+  <meta name="theme-color" content="#1d5a3f">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div id="demo-banner" class="demo" hidden>Demo mode: not connected to the FarmasLog API. Everything below is sample data.</div>
+  <header class="site-header">
+    <a class="logo-link" href="#/signin" aria-label="FarmasLog home"><img src="brand/logo-header.png" alt="FarmasLog" width="190" height="48"></a>
+  </header>
   <div class="shell">
     <section class="story" aria-labelledby="headline">
-      <p class="brand">FarmasLog</p>
-      <h1 id="headline">Know the farmer before you lend.</h1>
-      <p class="lede">One check tells a bank or programme whether a smallholder record exists, where the farm is, and how strong the evidence is.</p>
+      <div class="hero">
+        <img class="hero-img" src="brand/hero-farmer.jpg" alt="A farmer wading through a rice field, holding a bundle of rice stalks" width="540" height="960" fetchpriority="high">
+        <div class="hero-copy">
+          <h1 id="headline">Know the farmer before you lend.</h1>
+          <p class="lede">One check tells a bank or programme whether a smallholder record exists, where the farm is, and how strong the evidence is.</p>
+        </div>
+      </div>
       <div class="area" role="group" aria-labelledby="area-title">
         <h2 id="area-title">Show it for any area</h2>
         <div class="area-grid">
@@ -42,7 +54,7 @@
       <div class="card">
         <div id="view-signin" data-view="signin">
           <h2 tabindex="-1">Sign in</h2>
-          <p class="sub">For partner organisations and FarmasLog staff.</p>
+          <p class="sub">For partner organisations and FarmasLog staff. New team member? Use the temporary password your administrator gave you.</p>
           <p id="demo-hint" class="hint" hidden>Demo login: demo@farmaslog.test with password demo-password-123</p>
           <form id="form-signin" novalidate>
             <label for="si-email">Work email</label>
@@ -98,6 +110,43 @@
       </div>
     </section>
   </div>
+  <section class="how" id="how" aria-labelledby="how-title">
+    <div class="how-inner">
+      <h2 id="how-title">How FarmasLog works</h2>
+      <p class="how-lede">Banks and programmes get a quick, honest check on a smallholder record. Behind every check is a record that people on the ground have registered, reviewed and visited.</p>
+      <div class="how-grid">
+        <div>
+          <h3>For banks and programmes</h3>
+          <ol class="steps">
+            <li><strong>Request access.</strong> Register your organisation. A FarmasLog administrator reviews and approves it before sign-in works.</li>
+            <li><strong>Get a test key.</strong> Create a test API key from your dashboard, up to five at a time. Live keys are issued by FarmasLog.</li>
+            <li><strong>Check a farmer.</strong> Enter a phone number or FarmasLog ID on the Verify screen, or call the API from your own system. You see whether a record exists, where the farm is, the crop, and how strong the evidence is.</li>
+            <li><strong>Track your use.</strong> The Usage tab shows requests and billable checks by month. Only successful lookups are billed.</li>
+          </ol>
+        </div>
+        <div>
+          <h3>How a farmer gets on the record</h3>
+          <ol class="steps">
+            <li><strong>Registered with consent.</strong> A field agent or administrator records the farmer, the farm and its location, after the farmer agrees to what is collected and why.</li>
+            <li><strong>Reviewed.</strong> A data manager approves the record, or flags it if it looks like a duplicate.</li>
+            <li><strong>Visited.</strong> A field agent visits the farm and confirms its location with GPS.</li>
+            <li><strong>Evidence grows.</strong> Every record shows how it is backed: self-reported, satellite signal, or verified in the field. Lenders see that level with each result.</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="site-footer">
+    <div class="foot-inner">
+      <img src="brand/logo-full.png" alt="FarmasLog. Real farmer, verified Data." width="280" height="71">
+      <div>
+        <p class="credit"><strong>FarmasLog</strong> by Frankiecode Solutions</p>
+        <p class="legal">&copy; 2026 Frankiecode Solutions. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
   <script src="config.js"></script>
   <script type="module" src="app.js"></script>
 </body>

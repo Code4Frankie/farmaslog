@@ -120,6 +120,13 @@ export const openapi = {
       post: { tags: ['Partners & keys'], summary: 'Create partner (super admin)', security: bearerJwt, responses: { 201: { description: 'Created' } } },
       get: { tags: ['Partners & keys'], summary: 'List partners', security: bearerJwt, responses: { 200: { description: 'OK' } } },
     },
+    '/v1/auth/change-password': { post: { tags: ['Auth'], summary: 'Change your own password (also how a new team member replaces a temporary one)', security: bearerJwt, requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['currentPassword', 'newPassword'], properties: { currentPassword: { type: 'string' }, newPassword: { type: 'string', minLength: 12 } } } } } }, responses: { 200: { description: 'Updated' }, 400: err('Wrong current password, or new password too short or unchanged') } } },
+    '/v1/staff': {
+      get: { tags: ['Team'], summary: 'List FarmasLog team members (super admin)', security: bearerJwt, responses: { 200: { description: 'OK' } } },
+      post: { tags: ['Team'], summary: 'Onboard a team member with a one-time temporary password (super admin)', security: bearerJwt, requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['name', 'email', 'role'], properties: { name: { type: 'string' }, email: { type: 'string' }, role: { type: 'string', enum: ['data_manager', 'field_agent', 'finance', 'auditor'] } } } } } }, responses: { 201: { description: 'Created; response includes the temporary password once' }, 409: err('Email already in use') } },
+    },
+    '/v1/staff/{id}/reset-password': { post: { tags: ['Team'], summary: 'Issue a new temporary password (super admin)', security: bearerJwt, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Reset; response includes the temporary password once' } } } },
+    '/v1/staff/{id}/status': { post: { tags: ['Team'], summary: 'Disable or re-enable a team member (super admin)', security: bearerJwt, parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['status'], properties: { status: { type: 'string', enum: ['active', 'disabled'] } } } } } }, responses: { 200: { description: 'Updated' } } } },
     '/v1/users': { post: { tags: ['Partners & keys'], summary: 'Create a user (super admin)', security: bearerJwt, responses: { 201: { description: 'Created' } } } },
     '/v1/partners/{partnerId}/api-keys': {
       parameters: [{ name: 'partnerId', in: 'path', required: true, schema: { type: 'string' } }],

@@ -9,8 +9,9 @@ import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { validate } from '../middleware/validate.js';
 import { loginLimiter } from '../middleware/rateLimit.js';
-import { authenticate } from '../middleware/auth.js';
-import { loginSchema, signupSchema } from '../validators/index.js';
+import { authenticateAllowingTemporaryPassword } from '../middleware/auth.js';
+import { auditCtx } from '../services/audit.service.js';
+import { changePasswordSchema, loginSchema, signupSchema } from '../validators/index.js';
 
 const router = Router();
 const orgName = async (id) => (id ? (await Partner.findById(id).lean())?.organization ?? null : null);
@@ -24,7 +25,7 @@ router.post('/login', loginLimiter, validate(loginSchema), asyncHandler(async (r
   if (user.status === 'pending') throw new AppError(403, 'ACCOUNT_PENDING', 'Your access request is waiting for approval.');
   if (user.status !== 'active') throw new AppError(401, 'INVALID_CREDENTIALS', 'Email or password is incorrect.');
   const token = jwt.sign({ role: user.role }, env.jwtSecret, { subject: String(user._id), expiresIn: env.jwtExpiresIn, algorithm: 'HS256' });
-  res.json({ token, expiresIn: env.jwtExpiresIn, user: { id: user._id, email: user.email, name: user.name, role: user.role, partnerId: user.partnerId ?? null, organization: await orgName(user.partnerId) } });
+  res.json({ token, expiresIn: env.jwtExpiresIn, user: { id: user._id, email: user.email, name: user.name, role: user.role, partnerId: user.partnerId ?? null, organization: await orgName(user.partnerId), mustChangePassword: Boolean(user.mustChangePassword) } });
 }));
 
 // Organisations request access; nothing works until a super admin approves (POST /v1/partners/:id/approve).
@@ -42,6 +43,20 @@ router.post('/signup', loginLimiter, validate(signupSchema), asyncHandler(async 
   res.status(201).json({ message: 'Request received. An administrator will review it before you can sign in.' });
 }));
 
-router.get('/me', authenticate, asyncHandler(async (req, res) => res.json({ user: { ...req.user, organization: await orgName(req.user.partnerId) } })));
+router.get('/me', authenticateAllowingTemporaryPassword, asyncHandler(async (req, res) => res.json({ user: { ...req.user, organization: await orgName(req.user.partnerId) } })));
+
+// Anyone signed in can change their own password. This is also how a new team member leaves the temporary password
+// an administrator gave them: every other endpoint refuses them until this succeeds.
+router.post('/change-password', loginLimiter, authenticateAllowingTemporaryPassword, validate(changePasswordSchema), asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  const user = await User.findById(req.user.id).select('+passwordHash');
+  if (!(await bcrypt.compare(currentPassword, user.passwordHash))) throw new AppError(400, 'CURRENT_PASSWORD_WRONG', 'Your current password is not correct.');
+  if (currentPassword === newPassword) throw new AppError(400, 'PASSWORD_UNCHANGED', 'Choose a new password that is different from the current one.');
+  user.passwordHash = await bcrypt.hash(newPassword, 12);
+  user.mustChangePassword = false;
+  await user.save();
+  await writeAudit(auditCtx(req), { action: 'user.password_changed', entityType: 'User', entityId: user._id });
+  res.json({ message: 'Password updated.', user: { ...req.user, mustChangePassword: false, organization: await orgName(req.user.partnerId) } });
+}));
 
 export default router;
