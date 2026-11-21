@@ -8,7 +8,7 @@ import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
-import { createStaffSchema, staffStatusSchema } from '../validators/index.js';
+import { createStaffSchema, staffListSchema, staffStatusSchema } from '../validators/index.js';
 import { auditCtx, writeAudit } from '../services/audit.service.js';
 
 // FarmasLog's own team (field agents, data managers, finance, auditors). Super admin only.
@@ -17,7 +17,7 @@ const router = Router();
 router.use(authenticate, authorize(ROLES.SUPER_ADMIN));
 
 const tempPassword = () => crypto.randomBytes(12).toString('base64url'); // 16 characters, shown once
-const view = (u) => ({ id: u._id, name: u.name, email: u.email, role: u.role, status: u.status, mustChangePassword: Boolean(u.mustChangePassword), createdAt: u.createdAt });
+const view = (u) => ({ id: u._id, name: u.name, email: u.email, role: u.role, status: u.status, mustChangePassword: Boolean(u.mustChangePassword), phone: u.phone ?? null, state: u.state ?? null, lga: u.lga ?? null, createdAt: u.createdAt });
 const NOTE = 'Share this temporary password privately. It is shown once, and they must choose their own at first sign-in.';
 
 async function loadStaff(id) {
@@ -26,8 +26,9 @@ async function loadStaff(id) {
   return u;
 }
 
-router.get('/', asyncHandler(async (_req, res) => {
-  res.json({ data: (await User.find({ role: { $in: STAFF_ROLES } }).sort({ createdAt: -1 }).lean()).map(view) });
+router.get('/', validate(staffListSchema, 'query'), asyncHandler(async (req, res) => {
+  const filter = { role: { $in: STAFF_ROLES }, ...(req.query.status ? { status: req.query.status } : {}) };
+  res.json({ data: (await User.find(filter).sort({ createdAt: -1 }).lean()).map(view) });
 }));
 
 router.post('/', validate(createStaffSchema), asyncHandler(async (req, res) => {
@@ -52,6 +53,18 @@ router.post('/:id/reset-password', asyncHandler(async (req, res) => {
   await writeAudit(auditCtx(req), { action: 'staff.password_reset', entityType: 'User', entityId: u._id });
   res.json({ ...view(u), temporaryPassword: password, note: NOTE });
 }));
+
+// Field-agent applications (POST /v1/auth/agent-signup) wait here for a decision.
+for (const [action, status, audit] of [['approve', 'active', 'staff.application_approved'], ['reject', 'disabled', 'staff.application_rejected']]) {
+  router.post(`/:id/${action}`, asyncHandler(async (req, res) => {
+    const u = await loadStaff(req.params.id);
+    if (u.status !== 'pending') throw new AppError(409, 'NOT_PENDING', 'This application has already been decided.');
+    u.status = status;
+    await u.save();
+    await writeAudit(auditCtx(req), { action: audit, entityType: 'User', entityId: u._id });
+    res.json(view(u));
+  }));
+}
 
 router.post('/:id/status', validate(staffStatusSchema), asyncHandler(async (req, res) => {
   const u = await loadStaff(req.params.id);

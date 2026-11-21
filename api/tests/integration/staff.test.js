@@ -89,3 +89,39 @@ test('anyone can change their own password with the current one', async () => {
   const t = await login(app, 'dm@staff.test');
   expect((await request(app).post('/v1/auth/change-password').set(auth(t)).send({ currentPassword: PASSWORD, newPassword: 'another-long-passphrase' })).status).toBe(200);
 });
+
+test('field-agent applications: apply, wait, then an administrator approves or rejects', async () => {
+  const apply = { name: 'Chidi Applicant', email: 'Chidi@Apply.test', phone: '0706 758 4686', state: 'Nasarawa', lga: 'Awe', password: 'a-chosen-passphrase-1' };
+  expect((await request(app).post('/v1/auth/agent-signup').send({ ...apply, password: 'short' })).status).toBe(400);
+  expect((await request(app).post('/v1/auth/agent-signup').send({ ...apply, phone: '12345' })).body.errorCode).toBe('INVALID_PHONE');
+  expect((await request(app).post('/v1/auth/agent-signup').send(apply)).status).toBe(201);
+  expect((await request(app).post('/v1/auth/agent-signup').send(apply)).status).toBe(409);
+
+  const pendingLogin = await request(app).post('/v1/auth/login').send({ email: apply.email, password: apply.password });
+  expect(pendingLogin.status).toBe(403);
+  expect(pendingLogin.body.errorCode).toBe('ACCOUNT_PENDING');
+
+  const pending = await request(app).get('/v1/staff').query({ status: 'pending' }).set(auth(admin));
+  const row = pending.body.data.find((u) => u.email === 'chidi@apply.test');
+  expect(row).toMatchObject({ role: 'field_agent', status: 'pending', phone: '+2347067584686', state: 'Nasarawa', lga: 'Awe' });
+
+  expect((await request(app).post(`/v1/staff/${row.id}/approve`)).status).toBe(401);
+  expect((await request(app).post(`/v1/staff/${row.id}/approve`).set(auth(admin))).body.status).toBe('active');
+  expect((await request(app).post(`/v1/staff/${row.id}/approve`).set(auth(admin))).status).toBe(409);
+  const ok = await request(app).post('/v1/auth/login').send({ email: apply.email, password: apply.password });
+  expect(ok.status).toBe(200);
+  expect(ok.body.user).toMatchObject({ role: 'field_agent', mustChangePassword: false });
+
+  // a second applicant is rejected and cannot sign in
+  await request(app).post('/v1/auth/agent-signup').send({ ...apply, email: 'no@apply.test' });
+  const second = (await request(app).get('/v1/staff').query({ status: 'pending' }).set(auth(admin))).body.data[0];
+  expect((await request(app).post(`/v1/staff/${second.id}/reject`).set(auth(admin))).body.status).toBe('disabled');
+  expect((await request(app).post('/v1/auth/login').send({ email: 'no@apply.test', password: apply.password })).status).toBe(401);
+});
+
+test('organisations can sign up as government agencies or NGOs', async () => {
+  for (const type of ['government', 'ngo']) {
+    const r = await request(app).post('/v1/auth/signup').send({ organization: `Org ${type}`, type, name: 'Contact Person', email: `${type}@org.test`, password: 'a-long-passphrase-1' });
+    expect(r.status).toBe(201);
+  }
+});

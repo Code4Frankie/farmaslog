@@ -14,7 +14,7 @@ const location = Joi.object({
 
 export const signupSchema = Joi.object({
   organization: Joi.string().trim().min(2).max(120).required(),
-  type: Joi.string().valid('programme', 'bank', 'insurer', 'cooperative', 'extension', 'other').default('other'),
+  type: Joi.string().valid('programme', 'bank', 'insurer', 'cooperative', 'extension', 'government', 'ngo', 'other').default('other'),
   name: Joi.string().trim().min(2).max(120).required(),
   email: Joi.string().email({ tlds: { allow: false } }).required(),
   password: Joi.string().min(12).max(200).required(),
@@ -85,7 +85,7 @@ export const listFarmersSchema = Joi.object({
 
 export const createPartnerSchema = Joi.object({
   organization: Joi.string().trim().min(2).max(120).required(),
-  type: Joi.string().valid('programme', 'bank', 'insurer', 'cooperative', 'extension', 'other'),
+  type: Joi.string().valid('programme', 'bank', 'insurer', 'cooperative', 'extension', 'government', 'ngo', 'other'),
   plan: Joi.string().valid(...PLANS),
   billingEmail: Joi.string().email({ tlds: { allow: false } }),
 });
@@ -132,3 +132,15 @@ export const changePasswordSchema = Joi.object({
   currentPassword: Joi.string().max(200).required(),
   newPassword: Joi.string().min(12).max(200).required(),
 });
+
+// Someone applying to become a FarmasLog field agent. Nothing works until an administrator approves it.
+export const agentSignupSchema = Joi.object({
+  name: Joi.string().trim().min(2).max(120).required(),
+  email: Joi.string().email({ tlds: { allow: false } }).required(),
+  phone: Joi.string().trim().min(7).max(25).required(),
+  state: Joi.string().trim().max(60).required(),
+  lga: Joi.string().trim().max(60).required(),
+  password: Joi.string().min(12).max(200).required(),
+});
+
+export const staffListSchema = Joi.object({ status: Joi.string().valid('active', 'disabled', 'pending') });

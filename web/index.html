@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>FarmasLog: know the farmer before you lend</title>
-  <meta name="description" content="FarmasLog checks that a smallholder record exists, where the farm is, and how strong the evidence is.">
+  <title>FarmasLog: know your farmer, verify the farm</title>
+  <meta name="description" content="FarmasLog helps banks, grant funders and government agencies verify smallholder farmers and their farms for lending, grants, incentives and partnerships.">
   <link rel="icon" href="brand/favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="brand/favicon-32.png">
   <link rel="icon" type="image/png" sizes="192x192" href="brand/favicon-192.png">
@@ -16,18 +16,29 @@
   <div id="demo-banner" class="demo" hidden>Demo mode: not connected to the FarmasLog API. Everything below is sample data.</div>
   <header class="site-header">
     <a class="logo-link" href="#/signin" aria-label="FarmasLog home"><img src="brand/logo-header.png" alt="FarmasLog" width="190" height="48"></a>
+    <nav class="site-nav" aria-label="Site">
+      <a href="#how">How it works</a>
+      <a href="#/agent">Become an agent</a>
+    </nav>
   </header>
+
+  <section class="hero" aria-labelledby="headline">
+    <img class="hero-bg" src="brand/hero-farmer.jpg" alt="" width="540" height="960">
+    <img class="hero-photo" src="brand/hero-farmer.jpg" alt="A farmer wading through a rice field, holding a bundle of rice stalks" width="540" height="960" fetchpriority="high">
+    <div class="hero-inner">
+      <h1 id="headline">
+        <span class="hero-lead">Know your farmer.</span>
+        <span class="hero-sub">Verify the farm for lending, international grants and support, government incentives and partnerships.</span>
+      </h1>
+      <p class="lede">One check tells a bank, programme or government agency whether a smallholder record exists, where the farm is, and how strong the evidence is.</p>
+    </div>
+  </section>
+
   <div class="shell">
-    <section class="story" aria-labelledby="headline">
-      <div class="hero">
-        <img class="hero-img" src="brand/hero-farmer.jpg" alt="A farmer wading through a rice field, holding a bundle of rice stalks" width="540" height="960" fetchpriority="high">
-        <div class="hero-copy">
-          <h1 id="headline">Know the farmer before you lend.</h1>
-          <p class="lede">One check tells a bank or programme whether a smallholder record exists, where the farm is, and how strong the evidence is.</p>
-        </div>
-      </div>
+    <section class="story" aria-labelledby="area-title">
       <div class="area" role="group" aria-labelledby="area-title">
         <h2 id="area-title">Show it for any area</h2>
+        <p class="area-help">Type any state, local government area, community and crop to see how a result reads.</p>
         <div class="area-grid">
           <div><label for="ar-state">State</label><input id="ar-state" list="state-list" autocomplete="off"><datalist id="state-list"></datalist></div>
           <div><label for="ar-lga">Local government area</label><input id="ar-lga" list="lga-list" autocomplete="off"><datalist id="lga-list"></datalist></div>
@@ -64,18 +75,24 @@
             <button type="submit" class="primary">Sign in</button>
             <p class="msg" role="alert" hidden></p>
           </form>
-          <p class="switch">New organisation? <a href="#/signup">Request access</a></p>
+          <div class="access-cta">
+            <p class="access-kicker">New to FarmasLog?</p>
+            <a class="btn-access" href="#/signup"><strong>Request access</strong><span>For organisations and government agencies</span></a>
+          </div>
+          <p class="switch">Want to be a field agent? <a href="#/agent">Apply here</a></p>
         </div>
 
         <div id="view-signup" data-view="signup" hidden>
           <h2 tabindex="-1">Request access</h2>
-          <p class="sub">Tell us who you are. An administrator approves each organisation before sign-in works.</p>
+          <p class="sub">Banks, government agencies, grant funders and programmes: tell us who you are. An administrator approves each organisation before sign-in works.</p>
           <form id="form-signup" novalidate>
-            <label for="su-org">Organisation</label>
+            <label for="su-org">Organisation or agency</label>
             <input id="su-org" name="organization" type="text" autocomplete="organization" required>
             <label for="su-type">Type of organisation</label>
             <select id="su-type" name="type">
               <option value="bank">Bank or lender</option>
+              <option value="government">Government agency</option>
+              <option value="ngo">NGO or grant funder</option>
               <option value="programme">Agricultural programme</option>
               <option value="insurer">Insurer</option>
               <option value="cooperative">Cooperative</option>
@@ -98,6 +115,34 @@
           <p class="switch">Already approved? <a href="#/signin">Sign in</a></p>
         </div>
 
+        <div id="view-agent" data-view="agent" hidden>
+          <h2 tabindex="-1">Become a field agent</h2>
+          <p class="sub">Field agents visit farms, register farmers and confirm locations. Apply here and an administrator will review your application.</p>
+          <form id="form-agent" novalidate>
+            <label for="ag-name">Full name</label>
+            <input id="ag-name" name="name" type="text" autocomplete="name" required>
+            <label for="ag-email">Email</label>
+            <input id="ag-email" name="email" type="email" autocomplete="email" required>
+            <label for="ag-phone">Phone number</label>
+            <input id="ag-phone" name="phone" type="tel" autocomplete="tel" placeholder="0706 758 4686" required>
+            <label for="ag-state">State where you can work</label>
+            <input id="ag-state" name="state" list="ag-states" autocomplete="off" required>
+            <datalist id="ag-states"></datalist>
+            <label for="ag-lga">Local government area</label>
+            <input id="ag-lga" name="lga" list="ag-lgas" autocomplete="off" required>
+            <datalist id="ag-lgas"></datalist>
+            <label for="ag-password">Choose a password</label>
+            <input id="ag-password" name="password" type="password" autocomplete="new-password" minlength="12" required aria-describedby="ag-pw-help">
+            <p id="ag-pw-help" class="help">At least 12 characters. You will use it to sign in once you are approved.</p>
+            <button type="submit" class="primary">Apply to be an agent</button>
+            <p class="msg" role="alert" hidden></p>
+          </form>
+          <div id="agent-done" hidden>
+            <p class="done">Application received. An administrator will review it before you can sign in.</p>
+          </div>
+          <p class="switch">Already approved? <a href="#/signin">Sign in</a></p>
+        </div>
+
         <div id="view-app" data-view="app" hidden>
           <header class="bar">
             <p><strong id="org"></strong> <span id="role" class="muted"></span></p>
@@ -110,13 +155,14 @@
       </div>
     </section>
   </div>
+
   <section class="how" id="how" aria-labelledby="how-title">
     <div class="how-inner">
       <h2 id="how-title">How FarmasLog works</h2>
-      <p class="how-lede">Banks and programmes get a quick, honest check on a smallholder record. Behind every check is a record that people on the ground have registered, reviewed and visited.</p>
+      <p class="how-lede">Banks, programmes and government agencies get a quick, honest check on a smallholder record. Behind every check is a record that people on the ground have registered, reviewed and visited.</p>
       <div class="how-grid">
         <div>
-          <h3>For banks and programmes</h3>
+          <h3>For banks, programmes and agencies</h3>
           <ol class="steps">
             <li><strong>Request access.</strong> Register your organisation. A FarmasLog administrator reviews and approves it before sign-in works.</li>
             <li><strong>Get a test key.</strong> Create a test API key from your dashboard, up to five at a time. Live keys are issued by FarmasLog.</li>
@@ -139,10 +185,20 @@
 
   <footer class="site-footer">
     <div class="foot-inner">
-      <img src="brand/logo-full.png" alt="FarmasLog. Real farmer, verified Data." width="280" height="71">
-      <div>
+      <div class="foot-brand">
+        <img src="brand/logo-full.png" alt="FarmasLog. Real farmer, verified Data." width="280" height="71">
         <p class="credit"><strong>FarmasLog</strong> by Frankiecode Solutions</p>
         <p class="legal">&copy; 2026 Frankiecode Solutions. All rights reserved.</p>
+      </div>
+      <div class="foot-agents">
+        <h2>Want to be a FarmasLog field agent?</h2>
+        <p>Chat with us on WhatsApp, or <a href="#/agent">apply online</a>.</p>
+        <a class="wa" href="https://wa.me/2347067584686?text=Hello%20FarmasLog%2C%20I%27d%20like%20to%20become%20a%20field%20agent." target="_blank" rel="noopener noreferrer" aria-label="Chat with FarmasLog on WhatsApp, 0706 758 4686">
+          <span class="wa-icon" aria-hidden="true">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" focusable="false"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+          </span>
+          <span class="wa-text"><strong>Chat with us on WhatsApp</strong><small>0706 758 4686</small></span>
+        </a>
       </div>
     </div>
   </footer>

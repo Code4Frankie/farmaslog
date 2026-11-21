@@ -10,6 +10,7 @@ const TABS = {
 };
 const TITLES = { console: 'Verify a farmer', keys: 'API keys', usage: 'Usage', approvals: 'Access requests', farmers: 'Farmers', register: 'Register a farmer', team: 'FarmasLog team', password: 'Change your password' };
 const TAB = { console: 'Verify', keys: 'API keys', usage: 'Usage', approvals: 'Requests', farmers: 'Farmers', register: 'Register', team: 'Team', password: 'Password' };
+const ORG_TYPES = { bank: 'Bank or lender', government: 'Government agency', ngo: 'NGO or grant funder', programme: 'Agricultural programme', insurer: 'Insurer', cooperative: 'Cooperative', extension: 'Extension service', other: 'Other' };
 const ONBOARD = [['field_agent', 'Field agent'], ['data_manager', 'Data manager'], ['finance', 'Finance'], ['auditor', 'Auditor']];
 
 const $ = (s) => document.querySelector(s);
@@ -55,6 +56,10 @@ async function demoApi(path, body, token) {
     if (String(body.password).length < 12) throw new ApiError(400, 'VALIDATION_ERROR', 'Request validation failed.', ['password must be at least 12 characters long']);
     return { message: 'Request received.' };
   }
+  if (path === '/v1/auth/agent-signup') {
+    if (String(body.password).length < 12) throw new ApiError(400, 'VALIDATION_ERROR', 'Request validation failed.', ['password must be at least 12 characters long']);
+    return { message: 'Application received.' };
+  }
   if (path === '/v1/auth/me' && token === 'demo') return { user: DEMO_USER };
   throw new ApiError(404, 'NOT_AVAILABLE', 'Demo mode has no server. Set FARMASLOG_API_URL to use this screen.');
 }
@@ -97,6 +102,8 @@ async function initArea() {
     input.addEventListener('input', () => { sample[key] = input.value; if (key === 'state') suggestLgas(); renderSlip(); });
   }
   suggestLgas(); renderSlip();
+  $('#ag-states').replaceChildren(...options(Object.keys(AREAS)));
+  $('#ag-state').addEventListener('input', () => $('#ag-lgas').replaceChildren(...options(AREAS[find(Object.keys(AREAS), $('#ag-state').value)] || [])));
 }
 const areasReady = initArea();
 
@@ -219,17 +226,18 @@ SCREENS.usage = async (el) => {
 };
 
 SCREENS.approvals = async (el) => {
-  const box = h('div'); const msg = h('div', { 'aria-live': 'polite' });
-  const load = async () => {
-    const r = await call('/v1/partners?status=pending');
-    box.replaceChildren(r.data.length ? table(['Organisation', 'Type', 'Requested', ''], r.data.map((p) => [
-      p.organization, p.type, date(p.createdAt),
-      h('div', { class: 'btns' }, ['approve', 'reject'].map((act) => h('button', { type: 'button', class: act === 'approve' ? 'primary' : 'secondary', onclick: async () => {
-        try { await call(`/v1/partners/${p._id}/${act}`, { method: 'POST' }); msg.replaceChildren(note(`${p.organization}: ${act}d.`, 'ok')); await load(); } catch (e) { msg.replaceChildren(fail(e)); }
-      } }, act === 'approve' ? 'Approve' : 'Reject'))),
-    ])) : note('No pending requests.', 'info'));
+  const msg = h('div', { 'aria-live': 'polite' }); const orgs = h('div'); const agents = h('div');
+  const DONE = { approve: 'approved', reject: 'rejected' };
+  const decide = async (path, label, act) => {
+    try { await call(`${path}/${act}`, { method: 'POST' }); msg.replaceChildren(note(`${label}: ${DONE[act]}.`, 'ok')); await load(); } catch (e) { msg.replaceChildren(fail(e)); }
   };
-  el.append(msg, box); await load();
+  const buttons = (path, label) => h('div', { class: 'btns' }, [['approve', 'Approve', 'primary'], ['reject', 'Reject', 'secondary']].map(([act, text, cls]) => h('button', { type: 'button', class: cls, onclick: () => decide(path, label, act) }, text)));
+  const load = async () => {
+    const [p, a] = await Promise.all([call('/v1/partners?status=pending'), call('/v1/staff?status=pending')]);
+    orgs.replaceChildren(p.data.length ? table(['Organisation', 'Type', 'Requested', ''], p.data.map((x) => [x.organization, ORG_TYPES[x.type] || x.type, date(x.createdAt), buttons(`/v1/partners/${x._id}`, x.organization)])) : note('No pending organisation requests.', 'info'));
+    agents.replaceChildren(a.data.length ? table(['Name', 'Email', 'Phone', 'Area', 'Applied', ''], a.data.map((x) => [x.name, x.email, x.phone || '', [x.lga, x.state].filter(Boolean).join(', '), date(x.createdAt), buttons(`/v1/staff/${x.id}`, x.name)])) : note('No pending field agent applications.', 'info'));
+  };
+  el.append(msg, h('h3', {}, 'Organisations and agencies'), orgs, h('h3', {}, 'Field agent applications'), agents); await load();
 };
 
 SCREENS.farmers = async (el) => {
@@ -324,9 +332,9 @@ SCREENS.team = async (el) => {
   const load = async () => {
     const r = await call('/v1/staff');
     box.replaceChildren(r.data.length ? table(['Name', 'Email', 'Role', 'Status', ''], r.data.map((u) => {
-      const own = u.id === user.id; const locked = own || u.role === 'super_admin';
+      const locked = u.id === user.id || u.role === 'super_admin' || u.status === 'pending';
       return [u.name, u.email, ROLES[u.role] || u.role,
-        h('span', {}, h('span', { class: `badge${u.status === 'disabled' ? ' off' : ''}` }, u.status === 'disabled' ? 'Disabled' : 'Active'), u.mustChangePassword ? [' ', h('span', { class: 'badge warn' }, 'Has not set a password yet')] : null),
+        h('span', {}, h('span', { class: `badge${u.status === 'disabled' ? ' off' : u.status === 'pending' ? ' warn' : ''}` }, { disabled: 'Disabled', pending: 'Awaiting approval' }[u.status] || 'Active'), u.mustChangePassword ? [' ', h('span', { class: 'badge warn' }, 'Has not set a password yet')] : null),
         locked ? '' : h('div', { class: 'btns' },
           h('button', { type: 'button', class: 'secondary', onclick: () => { if (confirm(`Issue a new temporary password for ${u.name}? Their current password will stop working.`)) act(`/v1/staff/${u.id}/reset-password`, undefined, (x) => reveal(x, `New temporary password for ${u.name}.`)); } }, 'Reset password'),
           u.status === 'disabled'
@@ -377,13 +385,20 @@ SCREENS.password = (el) => {
 };
 
 // ---- shell: sign in / sign up / signed-in app ----
+let current = 'signin';
+const ROUTES = { '#/signin': 'signin', '#/signup': 'signup', '#/agent': 'agent' };
 function show(name) {
+  current = name;
   for (const e of document.querySelectorAll('[data-view]')) e.hidden = e.dataset.view !== name;
   $('.shell').classList.toggle('app', name === 'app');
   document.body.classList.toggle('in-app', name === 'app');
   document.querySelector(`[data-view="${name}"] h2`)?.focus({ preventScroll: true });
 }
-function route() { show(user ? 'app' : location.hash === '#/signup' ? 'signup' : 'signin'); }
+function route(scroll = false) {
+  const next = user ? 'app' : ROUTES[location.hash] || (location.hash ? current : 'signin');
+  show(next);
+  if (scroll && next !== 'app') $('.shell').scrollIntoView({ block: 'start' });
+}
 
 async function openScreen(name) {
   await areasReady;
@@ -420,7 +435,7 @@ function bind(form, handler) {
     finally { button.disabled = false; button.textContent = label; }
   });
 }
-for (const input of document.querySelectorAll('#form-signin input[type=password], #form-signup input[type=password]')) eye(input);
+for (const input of document.querySelectorAll('#form-signin input[type=password], #form-signup input[type=password], #form-agent input[type=password]')) eye(input);
 bind($('#form-signin'), async ({ email, password }) => {
   const r = await api('/v1/auth/login', { method: 'POST', body: { email: email.trim(), password } });
   session.save(r.token); await enter(r.user); location.hash = '#/app';
@@ -429,8 +444,12 @@ bind($('#form-signup'), async (f) => {
   await api('/v1/auth/signup', { method: 'POST', body: { ...f, email: f.email.trim(), organization: f.organization.trim(), name: f.name.trim() } });
   $('#form-signup').hidden = true; $('#signup-done').hidden = false;
 });
+bind($('#form-agent'), async (f) => {
+  await api('/v1/auth/agent-signup', { method: 'POST', body: { name: f.name.trim(), email: f.email.trim(), phone: f.phone.trim(), state: f.state.trim(), lga: f.lga.trim(), password: f.password } });
+  $('#form-agent').hidden = true; $('#agent-done').hidden = false;
+});
 $('#signout').addEventListener('click', signOut);
-window.addEventListener('hashchange', route);
+window.addEventListener('hashchange', () => route(true));
 
 (async function init() {
   if (DEMO) { $('#demo-banner').hidden = false; $('#demo-hint').hidden = false; }
