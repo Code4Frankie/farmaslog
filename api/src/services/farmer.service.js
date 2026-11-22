@@ -1,3 +1,4 @@
+import { buildConsentRecord } from './consent.service.js';
 import { Farmer } from '../models/Farmer.js';
 import { Farm } from '../models/Farm.js';
 import { env } from '../config/env.js';
@@ -44,7 +45,7 @@ export async function registerFarmer(input, ctx) {
     farmaslogId: isDuplicate ? undefined : await allocateFarmaslogId(),
     name: input.name, phoneNormalized: phone,
     state: area.state, lga: area.lga, ward: input.ward || undefined, community: input.community || undefined,
-    consent: { ...input.consent, capturedAt: input.submittedAt || new Date() },
+    ...buildConsentRecord({ ...input.consent, capturedAt: input.submittedAt }, ctx),
     source: input.source || 'field_agent',
     status: isDuplicate ? 'duplicate_review' : 'pending_review',
     isSynthetic: !!input.isSynthetic,
@@ -131,6 +132,7 @@ export async function reviewFarmer(farmer, { decision, note }, ctx) {
   if (decision === 'reject') {
     farmer.status = 'rejected';
   } else {
+    if (farmer.consentStatus === 'withdrawn') throw new AppError(409, 'CONSENT_WITHDRAWN', 'Consent was withdrawn for this record. Record fresh consent before approving it.');
     const clash = await Farmer.exists({ _id: { $ne: farmer._id }, phoneNormalized: farmer.phoneNormalized, status: 'active' });
     if (clash) {
       throw new AppError(409, 'DUPLICATE_PHONE', 'An active record already has this phone number. Reject this record or correct the existing one; records are never merged automatically.');
@@ -148,6 +150,7 @@ export async function reviewFarmer(farmer, { decision, note }, ctx) {
 
 export async function recordFieldVerification(farmer, farm, input, ctx) {
   if (farmer.status === 'rejected') throw new AppError(409, 'INVALID_STATE', 'This record was rejected.');
+  if (farmer.consentStatus === 'withdrawn') throw new AppError(409, 'CONSENT_WITHDRAWN', 'Consent was withdrawn for this record.');
   const now = new Date();
   if (input.location) {
     farm.location = buildLocation({ ...input.location, source: 'gps_field_agent', collectedAt: now });

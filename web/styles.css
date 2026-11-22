@@ -51,7 +51,15 @@ body.in-app .site-nav { display: none; }
 .shell { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2rem; padding: 2.5rem 1rem 3rem;
   background: url("brand/watermark.png") 0 0 / 15rem, linear-gradient(165deg, var(--cream) 0%, var(--butter) 100%); }
 .story { display: flex; flex-direction: column; gap: 1.25rem; align-content: start; max-width: 34rem; width: 100%; margin: 0 auto; }
-.area h2 { font-size: 1.2rem; color: var(--paddy-dark); }
+.area h3 { font-size: 1.1rem; color: var(--paddy-dark); }
+.sample { padding: 2.5rem 1rem 3rem; background: var(--haze); border-top: 4px solid var(--sun); }
+.sample > * { max-width: var(--wide); margin-left: auto; margin-right: auto; }
+.sample-title { font-size: clamp(1.5rem, 4vw, 2rem); color: var(--paddy-dark); }
+.sample-lead { margin: .4rem auto 1.5rem; color: var(--muted); max-width: var(--wide); }
+.sample-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.5rem; align-items: start; }
+@media (min-width: 900px) { .sample { padding: 3.5rem max(2rem, calc((100% - var(--wide)) / 2)) 4rem; } .sample > * { max-width: none; margin-left: 0; margin-right: 0; } .sample-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 3rem; } }
+body.in-app .sample { display: none; }
+.hero-brand { margin: 0; font-size: clamp(1.4rem, 4vw, 2rem); font-weight: 800; letter-spacing: .01em; color: var(--sun); text-shadow: 0 1px 6px rgba(0,0,0,.45); }
 .area-help { margin: .3rem 0 .8rem; color: var(--muted); font-size: .92rem; }
 .area-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem .75rem; }
 .area label { display: block; margin-bottom: .2rem; font-size: .85rem; font-weight: 600; color: var(--paddy-dark); }
@@ -108,10 +116,10 @@ button:disabled { opacity: .65; cursor: progress; }
 .account dd { margin: 0; font-weight: 600; text-align: right; }
 
 @media (min-width: 900px) {
-  .shell { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 3rem; padding: 3.5rem max(2rem, calc((100% - var(--wide)) / 2)) 4rem; align-items: start;
+  .shell { grid-template-columns: minmax(0, 1fr); gap: 3rem; padding: 3.5rem max(2rem, calc((100% - var(--wide)) / 2)) 4rem; align-items: start;
     background: url("brand/watermark.png") 0 0 / 17rem, linear-gradient(165deg, var(--cream) 0%, var(--butter) 100%); }
   .story { margin: 0; justify-self: start; max-width: 36rem; }
-  .panel { justify-content: flex-end; }
+  .panel { justify-content: center; }
   .card { max-width: 30rem; }
 }
 
@@ -166,6 +174,9 @@ td .btns { margin: 0; }
 .newkey .btns { margin-top: .6rem; }
 .badge { display: inline-block; padding: 0 .45rem; border-radius: 4px; border: 1.5px solid var(--line); font-size: .85rem; white-space: nowrap; background: #fff; }
 .badge.warn { border-color: var(--amber); background: var(--butter); }
+.consent { border: 1.5px solid var(--line); border-radius: 8px; padding: .8rem 1rem; background: #fff; margin-top: .6rem; }
+.consent-text p { margin: .5rem 0; line-height: 1.5; }
+.consent-script { background: var(--butter); border-radius: 6px; padding: .5rem .8rem; margin: .5rem 0; }
 .badge.off { border-color: var(--rust); color: var(--rust); }
 
 /* how it works */
@@ -197,4 +208,3 @@ body.in-app .how { display: none; }
 .wa-icon { width: 2.75rem; height: 2.75rem; border-radius: 50%; background: #25d366; color: #fff; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .wa-text { display: flex; flex-direction: column; line-height: 1.25; }
 .wa-text strong { font-size: 1rem; color: var(--paddy-dark); }
-.wa-text small { font-size: .95rem; color: var(--muted); letter-spacing: .02em; }

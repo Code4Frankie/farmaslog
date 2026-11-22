@@ -51,6 +51,17 @@ export const openapi = {
         responses: { 200: { description: 'States / LGAs' }, 404: err('Unknown state') },
       },
     },
+    '/v1/reference/consent': {
+      get: {
+        tags: ['Reference'], summary: 'Farmer consent text (public)',
+        description: 'Returns the versioned consent text and the agent read-aloud script. Languages without a reviewed translation are served in English (`textLanguage` says what was actually returned, `needsTranslation` is true). `incomplete` is true while the operator has not filled the contact/retention/hosting details.',
+        parameters: [
+          { name: 'lang', in: 'query', schema: { type: 'string', enum: ['en', 'ha', 'yo', 'ig', 'pcm'], default: 'en' } },
+          { name: 'version', in: 'query', schema: { type: 'string', example: 'consent-v1-draft' } },
+        ],
+        responses: { 200: { description: 'Consent text', content: { 'application/json': { schema: { $ref: '#/components/schemas/ConsentText' } } } }, 400: err('Unknown language or version') },
+      },
+    },
     '/v1/me/api-keys': {
       get: { tags: ['Partners & keys'], summary: 'Your organisation\'s keys (partner users)', security: bearerJwt, responses: { 200: { description: 'Keys (prefix only)' } } },
       post: { tags: ['Partners & keys'], summary: 'Create a test-mode key for your organisation (max 5 active; shown once)', security: bearerJwt, responses: { 201: { description: 'Created' }, 409: err('Key limit reached') } },
@@ -98,7 +109,24 @@ export const openapi = {
       post: {
         tags: ['Farmers'], summary: 'Record a field verification outcome', security: bearerJwt,
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        responses: { 200: { description: 'Evidence status recalculated' } },
+        responses: { 200: { description: 'Evidence status recalculated' }, 409: err('Rejected record or consent withdrawn') },
+      },
+    },
+    '/v1/farmers/{id}/consent-withdrawal': {
+      post: {
+        tags: ['Farmers'], summary: 'Withdraw a farmer\'s consent (staff)', security: bearerJwt,
+        description: 'Sets `consentStatus: withdrawn`. The record is immediately hidden from partner verification, cannot be approved, enriched or field-verified, and the change is audited (the free-text reason is stored on the record, never in the audit log). Erasure is a manual super-admin task, see docs/OPERATIONS.md.',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { reason: { type: 'string', maxLength: 300 } } } } } },
+        responses: { 200: { description: 'Withdrawn' }, 403: err('Role not allowed'), 409: err('Already withdrawn') },
+      },
+    },
+    '/v1/farmers/{id}/reconsent': {
+      post: {
+        tags: ['Farmers'], summary: 'Record fresh consent (clears needs_reconsent or withdrawn)', security: bearerJwt,
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['consent'], properties: { consent: { $ref: '#/components/schemas/ConsentInput' } } } } } },
+        responses: { 200: { description: 'Consent recorded, consentStatus valid' }, 400: err('Must use the current consent version') },
       },
     },
     '/v1/farmers/{id}/enrich': {
@@ -176,13 +204,38 @@ export const openapi = {
           requestId: { type: 'string' },
         },
       },
+      ConsentInput: {
+        type: 'object', required: ['given', 'wordingVersion'],
+        description: 'Send the version and language of the text that was actually shown (GET /v1/reference/consent). Unknown versions are rejected. The current version also requires `method` and `partnerSharing`. Legacy versions (console-draft-v0, qservers-form-v1) are accepted only for imports and are flagged needs_reconsent.',
+        properties: {
+          given: { type: 'boolean', enum: [true] },
+          wordingVersion: { type: 'string', enum: ['consent-v1-draft', 'console-draft-v0', 'qservers-form-v1'] },
+          language: { type: 'string', enum: ['en', 'ha', 'yo', 'ig', 'pcm'], default: 'en' },
+          method: { type: 'string', enum: ['agent_read_aloud', 'agent_checkbox', 'self_checkbox'] },
+          partnerSharing: { type: 'boolean', description: 'Second agreement box. If false the record is never returned to partners.' },
+          mediaStorage: { type: 'boolean', default: false, description: 'Optional third agreement box (photos/documents).' },
+        },
+      },
+      ConsentText: {
+        type: 'object',
+        properties: {
+          version: { type: 'string' }, language: { type: 'string' }, textLanguage: { type: 'string', description: 'Language of the text shown. English until a reviewed translation exists.' },
+          needsTranslation: { type: 'boolean' }, title: { type: 'string' },
+          sections: { type: 'array', items: { type: 'object', properties: { heading: { type: 'string' }, body: { type: 'string' } } } },
+          text: { type: 'string' }, agreementsIntro: { type: 'string' },
+          agreements: { type: 'object', properties: { core: { type: 'string' }, partnerSharing: { type: 'string' }, mediaStorage: { type: 'string' } } },
+          readAloud: { type: 'string' }, agentNote: { type: 'string' },
+          incomplete: { type: 'boolean', description: 'True while placeholders such as [registered address] are unfilled.' },
+          missingPlaceholders: { type: 'array', items: { type: 'string' } },
+        },
+      },
       RegisterFarmer: {
         type: 'object',
         required: ['name', 'phone', 'state', 'lga', 'consent', 'farm'],
         properties: {
           name: { type: 'string' }, phone: { type: 'string' }, state: { type: 'string' }, lga: { type: 'string' },
           ward: { type: 'string' }, community: { type: 'string' },
-          consent: { type: 'object', required: ['given', 'wordingVersion'], properties: { given: { type: 'boolean' }, wordingVersion: { type: 'string' } } },
+          consent: { $ref: '#/components/schemas/ConsentInput' },
           farm: { type: 'object', required: ['crop'], properties: { crop: { type: 'string' }, reportedAreaHa: { type: 'number' }, location: { type: 'object', properties: { lat: { type: 'number' }, lng: { type: 'number' }, source: { type: 'string' }, accuracyMeters: { type: 'number' } } } } },
         },
       },

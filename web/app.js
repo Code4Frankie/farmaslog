@@ -240,21 +240,72 @@ SCREENS.approvals = async (el) => {
   el.append(msg, h('h3', {}, 'Organisations and agencies'), orgs, h('h3', {}, 'Field agent applications'), agents); await load();
 };
 
+// ---- consent: text comes from the API; the version and language shown are the ones submitted ----
+const LANG_NAMES = { en: 'English', ha: 'Hausa', yo: 'Yoruba', ig: 'Igbo', pcm: 'Nigerian Pidgin' };
+const METHODS = [['agent_read_aloud', 'Agent read it aloud'], ['agent_checkbox', 'Farmer read it, agent ticked'], ['self_checkbox', 'Farmer ticked it themselves']];
+const PLACEHOLDER_LABELS = { registeredAddress: 'registered address', email: 'contact email', phone: 'contact phone', whatsapp: 'WhatsApp number', retention: 'retention period', hosting: 'hosting provider/country' };
+function consentWidget() {
+  const wrap = h('div', { class: 'consent' });
+  const lang = h('select', { id: 'c-lang' }, Object.entries(LANG_NAMES).map(([v, t]) => h('option', { value: v }, t)));
+  const method = h('select', { id: 'c-method' }, METHODS.map(([v, t]) => h('option', { value: v }, t)));
+  const core = h('input', { id: 'c-core', type: 'checkbox' });
+  const share = h('input', { id: 'c-share', type: 'checkbox' });
+  const media = h('input', { id: 'c-media', type: 'checkbox' });
+  const body = h('div', { class: 'consent-text', 'aria-live': 'polite' });
+  let data = null; let showScript = false;
+  const render = () => {
+    if (!data) return;
+    const script = h('div', { class: 'consent-script' }, h('p', {}, h('strong', {}, 'Read aloud: '), data.readAloud), h('p', { class: 'help' }, data.agentNote));
+    body.replaceChildren(
+      data.needsTranslation ? note(`The ${LANG_NAMES[data.language]} text has not been reviewed yet, so the English text is shown. Read it out in ${LANG_NAMES[data.language]} only if you can do so faithfully.`, 'info') : null,
+      data.incomplete ? note(`This consent text is incomplete: ${data.missingPlaceholders.map((k) => PLACEHOLDER_LABELS[k] || k).join(', ')} not set yet. Do not use it with real farmers until the operator fills these in.`) : null,
+      h('h3', {}, data.title),
+      ...data.sections.map((s) => h('p', {}, h('strong', {}, s.heading), ' ', s.body)),
+      h('div', { class: 'btns' }, h('button', { type: 'button', class: 'secondary', onclick: () => { showScript = !showScript; render(); } }, showScript ? 'Hide read-aloud script' : 'Show read-aloud script')),
+      showScript ? script : null,
+      h('p', {}, h('strong', {}, data.agreementsIntro)));
+  };
+  const load = async () => {
+    try { data = await call(`/v1/reference/consent?lang=${lang.value}`); render(); } catch (e) { body.replaceChildren(fail(e)); }
+  };
+  lang.addEventListener('change', load);
+  wrap.append(field('Language the farmer will hear or read', lang), body,
+    h('div', { class: 'check' }, core, h('label', { for: 'c-core' }, 'I have read, or had read to me, how FarmasLog will use my information, and I agree to it.')),
+    h('div', { class: 'check' }, share, h('label', { for: 'c-share' }, 'I agree that approved partners can check whether my record exists and see the information described above.')),
+    h('div', { class: 'check' }, media, h('label', { for: 'c-media' }, '(Optional) I agree that FarmasLog may keep photos or documents I give to support my record.')),
+    field('How was consent given?', method));
+  return {
+    el: wrap, ready: load(),
+    // The farmer-facing agreement labels come from the API when available (kept in sync with the displayed text).
+    value: () => ({ given: core.checked, wordingVersion: data?.version, language: lang.value, method: method.value, partnerSharing: share.checked, mediaStorage: media.checked }),
+    valid: () => !!data && core.checked,
+    reset: () => { core.checked = share.checked = media.checked = false; },
+  };
+}
+
 SCREENS.farmers = async (el) => {
   const canReview = ['super_admin', 'data_manager'].includes(user.role);
   const canVerify = ['super_admin', 'data_manager', 'field_agent'].includes(user.role);
   const status = h('select', { id: 'f-status' }, [['', 'All'], ['pending_review', 'Pending review'], ['duplicate_review', 'Possible duplicate'], ['active', 'Approved'], ['rejected', 'Rejected']].map(([v, t]) => h('option', { value: v }, t)));
+  const consentFilter = h('select', { id: 'f-consent' }, [['', 'Any'], ['needs_reconsent', 'Needs re-consent'], ['withdrawn', 'Withdrawn']].map(([v, t]) => h('option', { value: v }, t)));
   const box = h('div'); const msg = h('div', { 'aria-live': 'polite' });
   const act = async (path, body, okText) => {
     msg.replaceChildren();
     try { await call(path, { method: 'POST', body }); msg.append(note(okText, 'ok')); await load(); } catch (e) { msg.append(fail(e)); }
   };
   const load = async () => {
-    const r = await call(`/v1/farmers?limit=50${status.value ? `&status=${status.value}` : ''}`);
-    box.replaceChildren(h('p', { class: 'help' }, `Showing ${r.data.length} of ${r.total}.`), r.data.length ? table(['Name', 'Phone', 'Area', 'Status', 'Evidence', ''], r.data.map((f) => [
+    const r = await call(`/v1/farmers?limit=50${status.value ? `&status=${status.value}` : ''}${consentFilter.value ? `&consentStatus=${consentFilter.value}` : ''}`);
+    box.replaceChildren(h('p', { class: 'help' }, `Showing ${r.data.length} of ${r.total}.`), r.data.length ? table(['Name', 'Phone', 'Area', 'Status', 'Consent', 'Evidence', ''], r.data.map((f) => [
       h('span', {}, f.name, f.isSynthetic ? ' (test)' : ''), f.phone, [f.community, f.lga, f.state].filter(Boolean).join(', '), STATUS[f.status] || f.status,
+      f.consentStatus === 'withdrawn' ? h('span', { class: 'badge off' }, 'Withdrawn') : f.consentStatus === 'needs_reconsent' ? h('span', { class: 'badge warn' }, 'Needs re-consent') : 'OK',
       f.farm?.evidence ? f.farm.evidence.status.replace('_', ' ') : '',
       h('div', { class: 'btns' },
+        canVerify ? h('button', { type: 'button', class: 'secondary', onclick: () => recordConsent(f) }, 'Record consent') : null,
+        canVerify && f.consentStatus !== 'withdrawn' ? h('button', { type: 'button', class: 'secondary', onclick: async () => {
+          if (!confirm(`Withdraw consent for ${f.name}? The record will stop appearing to partners straight away.`)) return;
+          const reason = prompt('Reason (optional, do not include sensitive details):') ?? '';
+          await act(`/v1/farmers/${f.id}/consent-withdrawal`, reason.trim() ? { reason: reason.trim() } : {}, `Consent withdrawn for ${f.name}.`);
+        } }, 'Withdraw consent') : null,
         canReview && ['pending_review', 'duplicate_review'].includes(f.status) ? [
           h('button', { type: 'button', class: 'primary', onclick: () => act(`/v1/farmers/${f.id}/review`, { decision: 'approve' }, `${f.name} approved.`) }, 'Approve'),
           h('button', { type: 'button', class: 'secondary', onclick: () => act(`/v1/farmers/${f.id}/review`, { decision: 'reject' }, `${f.name} rejected.`) }, 'Reject')] : null,
@@ -266,8 +317,19 @@ SCREENS.farmers = async (el) => {
           h('button', { type: 'button', class: 'secondary', onclick: () => act(`/v1/farmers/${f.id}/field-verification`, { outcome: 'rejected', method: 'site_visit' }, `${f.name}: not confirmed.`) }, 'Not confirmed')] : null),
     ])) : note('No farmers match.', 'info'));
   };
+  const recordConsent = async (f) => {
+    const cw = consentWidget(); await cw.ready;
+    const submit = h('button', { type: 'submit', class: 'primary' }, 'Save consent');
+    const form = h('form', { onsubmit: async (e) => {
+      e.preventDefault();
+      if (!cw.valid()) return msg.replaceChildren(note('Tick the first agreement only after a clear yes from the farmer.'));
+      await act(`/v1/farmers/${f.id}/reconsent`, { consent: cw.value() }, `Consent recorded for ${f.name}.`);
+    } }, h('h3', {}, `Record consent: ${f.name}`), cw.el, h('div', { class: 'btns' }, submit, h('button', { type: 'button', class: 'secondary', onclick: () => msg.replaceChildren() }, 'Cancel')));
+    msg.replaceChildren(form); form.scrollIntoView?.({ block: 'start' });
+  };
   status.addEventListener('change', () => load().catch((e) => msg.replaceChildren(fail(e))));
-  el.append(h('div', { class: 'toolbar' }, field('Show', status)), msg, box); await load();
+  consentFilter.addEventListener('change', () => load().catch((e) => msg.replaceChildren(fail(e))));
+  el.append(h('div', { class: 'toolbar' }, field('Show', status), field('Consent', consentFilter)), msg, box); await load();
 };
 
 SCREENS.register = (el) => {
@@ -277,7 +339,7 @@ SCREENS.register = (el) => {
   const community = i('community'); const crop = i('crop', { required: true }); const area = i('area', { type: 'number', step: '0.01', min: '0.01' });
   const lat = i('lat', { type: 'number', step: 'any' }); const lng = i('lng', { type: 'number', step: 'any' }); const acc = i('acc', { type: 'number', min: '0' });
   const src = h('select', { id: 'r-src' }, [['farmer_reported', 'Typed in (not confirmed)'], ['gps_field_agent', 'GPS taken at the farm'], ['town_centre', 'Town or village centre']].map(([v, t]) => h('option', { value: v }, t)));
-  const consent = h('input', { id: 'r-consent', type: 'checkbox', required: true });
+  const cw = consentWidget();
   const test = h('input', { id: 'r-test', type: 'checkbox' });
   const out = h('div', { 'aria-live': 'polite' });
   const gpsBtn = h('button', { class: 'secondary', type: 'button', onclick: async () => {
@@ -288,16 +350,17 @@ SCREENS.register = (el) => {
   const form = h('form', {
     onsubmit: async (e) => {
       e.preventDefault(); out.replaceChildren();
+      if (!cw.valid()) return out.append(note('Tick the first agreement only after the farmer has clearly said yes. If the consent text did not load, check your connection.'));
       const body = {
         name: name.value.trim(), phone: phone.value.trim(), state: a.state.value.trim(), lga: a.lga.value.trim(), community: community.value.trim() || undefined,
-        consent: { given: consent.checked, wordingVersion: 'console-draft-v0' }, source: user.role === 'field_agent' ? 'field_agent' : 'admin', isSynthetic: test.checked,
+        consent: cw.value(), source: user.role === 'field_agent' ? 'field_agent' : 'admin', isSynthetic: test.checked,
         farm: { crop: crop.value.trim(), ...(area.value ? { reportedAreaHa: Number(area.value) } : {}),
           ...(lat.value && lng.value ? { location: { lat: Number(lat.value), lng: Number(lng.value), source: src.value, ...(acc.value ? { accuracyMeters: Number(acc.value) } : {}) } } : {}) },
       };
       try {
         const r = await call('/v1/farmers', { method: 'POST', body });
         out.append(note(`${r.name}: ${r.message}${r.farmaslogId ? ` FarmasLog ID ${r.farmaslogId}.` : ''}${(r.warnings || []).length ? ` Note: ${r.warnings.join(', ').replaceAll('_', ' ')}.` : ''}`, r.duplicateCandidate ? 'info' : 'ok'));
-        form.reset();
+        form.reset(); cw.reset();
       } catch (err) { out.append(fail(err)); }
     },
   },
@@ -306,7 +369,8 @@ SCREENS.register = (el) => {
   h('h3', {}, 'Farm location (optional)'),
   h('div', { class: 'grid' }, field('Latitude', lat), field('Longitude', lng), field('Accuracy (metres)', acc), field('Where did the coordinates come from?', src)),
   h('div', { class: 'btns' }, gpsBtn),
-  h('div', { class: 'check' }, consent, h('label', { for: 'r-consent' }, 'The farmer has been told what data is collected and why, and agrees to it.')),
+  h('h3', {}, 'Farmer consent'),
+  cw.el,
   h('div', { class: 'check' }, test, h('label', { for: 'r-test' }, 'This is a test record (for demos).')),
   h('div', { class: 'btns' }, h('button', { class: 'primary', type: 'submit' }, 'Register farmer')));
   el.append(form, out);

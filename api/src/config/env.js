@@ -31,6 +31,17 @@ export const env = {
   // with ALLOW_SYNTHETIC=true so the smoke test can run. Never set this on the real production service.
   allowSynthetic: bool(process.env.ALLOW_SYNTHETIC, !isProd),
   verifyIncludeCoordinates: bool(process.env.VERIFY_INCLUDE_COORDINATES, false),
+  // Consent text placeholders (see src/config/consent.js). Unset values show as [bracketed] gaps in the consent text.
+  consent: {
+    registeredAddress: process.env.CONSENT_REGISTERED_ADDRESS || '',
+    email: process.env.CONSENT_CONTACT_EMAIL || '',
+    phone: process.env.CONSENT_CONTACT_PHONE || '',
+    whatsapp: process.env.CONSENT_CONTACT_WHATSAPP || '',
+    retention: process.env.CONSENT_RETENTION_PERIOD || '',
+    hosting: process.env.CONSENT_HOSTING || '',
+    // When true, records flagged needs_reconsent are hidden from partner verification. Withdrawn records are ALWAYS hidden.
+    hideNeedsReconsent: bool(process.env.HIDE_NEEDS_RECONSENT, false),
+  },
   ndviThreshold: Number(process.env.NDVI_THRESHOLD || 0.3),
   areaTolerance: Number(process.env.AREA_DISCREPANCY_TOLERANCE || 0.3),
 };

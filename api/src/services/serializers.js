@@ -16,6 +16,7 @@ export function farmerView(farmer, farm) {
     submittedAt: f.submittedAt,
     programmeRequested: f.programmeRequested,
     consent: f.consent,
+    consentStatus: f.consentStatus ?? 'valid',
     createdAt: f.createdAt, updatedAt: f.updatedAt,
     farm: m && {
       crop: m.crop,

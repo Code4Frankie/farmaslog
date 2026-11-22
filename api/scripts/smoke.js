@@ -51,7 +51,7 @@ const mkUser = async (role) => {
 const agent = await mkUser('field_agent'); const manager = await mkUser('data_manager');
 if (!check('create + sign in field agent and data manager', agent && manager)) stop('cannot create staff users');
 
-const reg = (name) => ({ name, phone, state: area.state, lga: area.lga, community: area.community, consent: { given: true, wordingVersion: 'smoke-v1' }, isSynthetic: true, farm: { crop: 'White Yam', reportedAreaHa: 1.5, location: { lat: 7.05, lng: 9.0, source: 'farmer_pin', accuracyMeters: 25 } } });
+const reg = (name) => ({ name, phone, state: area.state, lga: area.lga, community: area.community, consent: { given: true, wordingVersion: 'consent-v1-draft', language: 'en', method: 'agent_checkbox', partnerSharing: true }, isSynthetic: true, farm: { crop: 'White Yam', reportedAreaHa: 1.5, location: { lat: 7.05, lng: 9.0, source: 'farmer_pin', accuracyMeters: 25 } } });
 const farmer = await call('POST', '/v1/farmers', { token: agent, body: reg(`Smoke Farmer ${tag}`) });
 if (!check('register synthetic farmer (pending review, FarmasLog ID issued)', farmer.status === 201 && farmer.body?.status === 'pending_review' && /^FL-/.test(farmer.body?.farmaslogId || ''), `${farmer.status} ${JSON.stringify(farmer.body)}`)) stop('registration failed (is ALLOW_SYNTHETIC enabled on this deployment?)');
 const { id, farmaslogId } = farmer.body;

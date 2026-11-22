@@ -9,7 +9,7 @@ const PHONE = '08000000001'; // synthetic test number
 
 const registration = (over = {}) => ({
   name: 'Micheal Ahile (TEST)', phone: PHONE, state: 'Benue', lga: 'Vandeikya', ward: 'Ihugh', community: 'Ihugh',
-  consent: { given: true, wordingVersion: 'test-v1' }, isSynthetic: true,
+  consent: { given: true, wordingVersion: 'consent-v1-draft', language: 'en', method: 'agent_checkbox', partnerSharing: true }, isSynthetic: true,
   farm: { crop: 'White yam', reportedAreaHa: 1.5, location: { lat: 7.05, lng: 9.0, source: 'farmer_pin', accuracyMeters: 25 } },
   ...over,
 });
@@ -33,7 +33,7 @@ describe('Micheal registers, Nancy verifies', () => {
   let farmerId, farmaslogId;
 
   test('registration needs consent', async () => {
-    const r = await request(app).post('/v1/farmers').set('Authorization', `Bearer ${agent}`).send(registration({ consent: { given: false, wordingVersion: 'v' } }));
+    const r = await request(app).post('/v1/farmers').set('Authorization', `Bearer ${agent}`).send(registration({ consent: { given: false, wordingVersion: 'consent-v1-draft' } }));
     expect(r.status).toBe(400);
   });
 

@@ -14,7 +14,7 @@ afterAll(() => env?.stop());
 
 const enrol = async (phone, state, lga, community) => {
   const r = await request(app).post('/v1/farmers').set('Authorization', `Bearer ${agent}`).send({
-    name: `Test ${phone}`, phone, state, lga, community, consent: { given: true, wordingVersion: 'v1' }, isSynthetic: true,
+    name: `Test ${phone}`, phone, state, lga, community, consent: { given: true, wordingVersion: 'consent-v1-draft', language: 'en', method: 'agent_checkbox', partnerSharing: true }, isSynthetic: true,
     farm: { crop: 'Maize', reportedAreaHa: 1 },
   });
   expect(r.status).toBe(201);

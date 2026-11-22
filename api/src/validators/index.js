@@ -1,3 +1,4 @@
+import { KNOWN_VERSIONS, CURRENT_CONSENT_VERSION, LANGUAGES, CONSENT_METHODS, CONSENT_STATUSES, TEXTS } from '../config/consent.js';
 import Joi from 'joi';
 import { FARMASLOG_ID_RE } from '../utils/ids.js';
 import { LOCATION_SOURCE, ONBOARDABLE_ROLES, PLANS, ROLE_LIST, SCOPE_LIST, FARMER_STATUS, NIGERIA_BBOX as B } from '../config/constants.js';
@@ -29,6 +30,30 @@ export const verifyQuerySchema = Joi.object({
   lga: Joi.string().trim().max(60),
 }).xor('phone', 'farmaslogId').messages({ 'object.xor': 'Provide exactly one of phone or farmaslogId.', 'object.missing': 'Provide exactly one of phone or farmaslogId.' });
 
+// Consent block. Unknown wording versions are rejected. The CURRENT version must also say how consent was captured and
+// whether partner sharing was agreed; legacy versions (imports of older records) may omit those and are flagged
+// needs_reconsent by the service.
+export const consentSchema = Joi.object({
+  given: Joi.boolean().valid(true).required(),
+  wordingVersion: Joi.string().trim().valid(...KNOWN_VERSIONS).required()
+    .messages({ 'any.only': `wordingVersion must be one of: ${KNOWN_VERSIONS.join(', ')}` }),
+  purpose: Joi.string().trim().max(200).default('Farmer and farm verification'),
+  language: Joi.string().valid(...LANGUAGES).default('en'),
+  textLanguage: Joi.string().valid(...LANGUAGES),
+  method: Joi.when('wordingVersion', { is: CURRENT_CONSENT_VERSION, then: Joi.string().valid(...CONSENT_METHODS).required(), otherwise: Joi.string().valid(...CONSENT_METHODS) }),
+  partnerSharing: Joi.when('wordingVersion', { is: CURRENT_CONSENT_VERSION, then: Joi.boolean().required(), otherwise: Joi.boolean() }),
+  mediaStorage: Joi.boolean().default(false),
+});
+
+export const consentWithdrawalSchema = Joi.object({ reason: Joi.string().trim().max(300).allow('') });
+export const reconsentSchema = Joi.object({
+  consent: consentSchema.custom((v, h) => (v.wordingVersion === CURRENT_CONSENT_VERSION ? v : h.message('Re-consent must use the current consent version.'))).required(),
+});
+export const consentReferenceSchema = Joi.object({
+  lang: Joi.string().valid(...LANGUAGES).default('en'),
+  version: Joi.string().valid(...Object.keys(TEXTS)),
+});
+
 export const registerFarmerSchema = Joi.object({
   name: Joi.string().trim().min(2).max(120).required(),
   phone: Joi.string().trim().max(25).required(),
@@ -36,11 +61,7 @@ export const registerFarmerSchema = Joi.object({
   lga: Joi.string().trim().max(60).required(),
   ward: Joi.string().trim().max(80).allow('', null),
   community: Joi.string().trim().max(80).allow('', null),
-  consent: Joi.object({
-    given: Joi.boolean().valid(true).required(),
-    wordingVersion: Joi.string().trim().max(40).required(),
-    purpose: Joi.string().trim().max(200).default('Farmer and farm verification'),
-  }).required(),
+  consent: consentSchema.required(),
   source: Joi.string().valid('self_registration', 'field_agent', 'admin', 'import').default('field_agent'),
   isSynthetic: Joi.boolean().default(false),
   sourceRef: Joi.string().trim().max(100),
@@ -78,6 +99,7 @@ export const fieldVerificationSchema = Joi.object({
 export const listFarmersSchema = Joi.object({
   state: Joi.string().trim().max(60), lga: Joi.string().trim().max(60), ward: Joi.string().trim().max(80),
   status: Joi.string().valid(...FARMER_STATUS),
+  consentStatus: Joi.string().valid(...CONSENT_STATUSES),
   phone: Joi.string().trim().max(25),
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(25),

@@ -31,7 +31,10 @@ export async function verifyFarmer(query, apiKey, vlog) {
     filter = { phoneNormalized: phone };
   }
   // Only approved records are verifiable; pending/duplicate/rejected records are invisible to partners.
-  const farmer = await Farmer.findOne({ ...filter, status: 'active' }).lean();
+  // Withdrawn consent always hides a record; needs_reconsent only when HIDE_NEEDS_RECONSENT is on; a farmer who declined
+  // partner sharing is never visible either.
+  const hidden = env.consent.hideNeedsReconsent ? ['withdrawn', 'needs_reconsent'] : ['withdrawn'];
+  const farmer = await Farmer.findOne({ ...filter, status: 'active', consentStatus: { $nin: hidden }, 'consent.partnerSharing': { $ne: false } }).lean();
   if (!farmer || (query.state && !same(farmer.state, query.state)) || (query.lga && !same(farmer.lga, query.lga))) {
     vlog.result = 'not_found';
     throw new AppError(404, 'RECORD_NOT_FOUND', 'No matching record is available to this account.');

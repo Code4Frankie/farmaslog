@@ -1,5 +1,8 @@
 import { Router } from 'express';
 import { AppError } from '../utils/AppError.js';
+import { validate } from '../middleware/validate.js';
+import { consentReferenceSchema } from '../validators/index.js';
+import { getConsent } from '../services/consent.service.js';
 import { AREAS, STATES, matchState } from '../data/ng-geo.js';
 
 const router = Router();
@@ -12,6 +15,13 @@ router.get('/areas', (req, res) => {
   const m = matchState(q, { maxDistance: 0 });
   if (!m) throw new AppError(404, 'STATE_NOT_FOUND', `No state matches '${q.slice(0, 60)}'.`);
   return res.json({ state: m.name, lgas: AREAS[m.name] });
+});
+
+// Public: the consent text shown to farmers. Falls back to English until a reviewed translation exists.
+router.get('/consent', validate(consentReferenceSchema, 'query'), (req, res) => {
+  res.set('Cache-Control', 'public, max-age=300');
+  const c = getConsent({ version: req.query.version, language: req.query.lang });
+  res.json(c);
 });
 
 export default router;

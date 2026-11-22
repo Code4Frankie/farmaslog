@@ -46,7 +46,7 @@ if (demo) {
   try {
     const { farmer } = await registerFarmer({
       name: 'Micheal Ahile (TEST)', phone: '08000000001', state: area.state, lga: area.lga, community: area.community,
-      consent: { given: true, wordingVersion: 'test-v0' }, source: 'admin', isSynthetic: true,
+      consent: { given: true, wordingVersion: 'consent-v1-draft', language: 'en', method: 'agent_checkbox', partnerSharing: true }, source: 'admin', isSynthetic: true,
       farm: { crop: area.crop, reportedAreaHa: 1.5 },
     }, ctx);
     await reviewFarmer(farmer, { decision: 'approve', note: 'seed' }, ctx);

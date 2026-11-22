@@ -3,9 +3,11 @@ import { connectDb, disconnectDb } from './config/db.js';
 import { env } from './config/env.js';
 import { logger } from './utils/logger.js';
 import { ensureBootstrapAdmin } from './bootstrap.js';
+import { migrateConsent } from './migrations/consent.js';
 
 await connectDb(env.mongoUri);
 await ensureBootstrapAdmin();
+await migrateConsent().then((n) => n && logger.info('consent_migration', { flagged: n })).catch((e) => logger.error('consent_migration_failed', { message: e.message }));
 const server = createApp().listen(env.port, () => logger.info('farmaslog_api_listening', { port: env.port, env: env.nodeEnv }));
 
 async function shutdown(signal) {

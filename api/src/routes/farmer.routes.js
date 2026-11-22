@@ -15,10 +15,11 @@ import { authenticate, authorize } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { auditCtx, writeAudit } from '../services/audit.service.js';
 import { registerFarmer, updateFarmer, reviewFarmer, recordFieldVerification } from '../services/farmer.service.js';
+import { withdrawConsent, recordReconsent } from '../services/consent.service.js';
 import { queueEnrichment } from '../services/enrichment/enrichment.service.js';
 import { farmerView } from '../services/serializers.js';
 import {
-  registerFarmerSchema, patchFarmerSchema, reviewSchema, fieldVerificationSchema, listFarmersSchema,
+  consentWithdrawalSchema, reconsentSchema, registerFarmerSchema, patchFarmerSchema, reviewSchema, fieldVerificationSchema, listFarmersSchema,
 } from '../validators/index.js';
 
 const { SUPER_ADMIN, DATA_MANAGER, FIELD_AGENT, AUDITOR } = ROLES;
@@ -54,7 +55,7 @@ router.post('/', authorize(SUPER_ADMIN, DATA_MANAGER, FIELD_AGENT), validate(reg
 router.get('/', validate(listFarmersSchema, 'query'), asyncHandler(async (req, res) => {
   const { page, limit, phone, ...f } = req.query;
   const filter = { ...scopeFor(req.user) };
-  for (const k of ['state', 'lga', 'ward', 'status']) if (f[k]) filter[k] = f[k];
+  for (const k of ['state', 'lga', 'ward', 'status', 'consentStatus']) if (f[k]) filter[k] = f[k];
   if (phone) {
     const p = normalizeNigerianPhone(phone);
     if (!p) throw new AppError(400, 'INVALID_PHONE', 'phone must be a valid Nigerian mobile number.');
@@ -89,7 +90,18 @@ router.post('/:id/field-verification', authorize(SUPER_ADMIN, DATA_MANAGER, FIEL
   res.json(farmerView(req.farmer, farm));
 }));
 
+router.post('/:id/consent-withdrawal', authorize(SUPER_ADMIN, DATA_MANAGER, FIELD_AGENT), validate(consentWithdrawalSchema), asyncHandler(async (req, res) => {
+  const farmer = await withdrawConsent(req.farmer, req.body, auditCtx(req));
+  res.json(farmerView(farmer, await Farm.findOne({ farmerId: farmer._id })));
+}));
+
+router.post('/:id/reconsent', authorize(SUPER_ADMIN, DATA_MANAGER, FIELD_AGENT), validate(reconsentSchema), asyncHandler(async (req, res) => {
+  const farmer = await recordReconsent(req.farmer, req.body.consent, auditCtx(req));
+  res.json(farmerView(farmer, await Farm.findOne({ farmerId: farmer._id })));
+}));
+
 router.post('/:id/enrich', authorize(SUPER_ADMIN, DATA_MANAGER), asyncHandler(async (req, res) => {
+  if (req.farmer.consentStatus === 'withdrawn') throw new AppError(409, 'CONSENT_WITHDRAWN', 'Consent was withdrawn for this record.');
   const farm = await Farm.findOne({ farmerId: req.farmer._id });
   await queueEnrichment(farm);
   await writeAudit(auditCtx(req), { action: 'farm.enrichment_requested', entityType: 'Farm', entityId: farm._id });

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { FARMER_STATUS, FARMER_SOURCE } from '../config/constants.js';
+import { CONSENT_METHODS, CONSENT_STATUSES } from '../config/consent.js';
 
 const { Schema } = mongoose;
 
@@ -17,7 +18,19 @@ const farmerSchema = new Schema(
       wordingVersion: { type: String, required: true },
       purpose: String,
       capturedAt: { type: Date, default: Date.now },
+      language: String, // language the consent was given in
+      textLanguage: String, // language of the text actually shown (English until a reviewed translation exists)
+      method: { type: String, enum: CONSENT_METHODS },
+      recordedAt: Date, // server time
+      recordedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+      partnerSharing: Boolean,
+      mediaStorage: Boolean,
+      textHash: String, // sha256 of the exact text shown (placeholders filled)
     },
+    consentStatus: { type: String, enum: CONSENT_STATUSES, default: 'valid' },
+    consentWithdrawnAt: Date,
+    consentWithdrawnBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    consentWithdrawalReason: { type: String, maxlength: 300 },
     source: { type: String, enum: FARMER_SOURCE, default: 'field_agent' },
     status: { type: String, enum: FARMER_STATUS, default: 'pending_review' },
     isSynthetic: { type: Boolean, default: false },
@@ -42,5 +55,6 @@ farmerSchema.index({ sourceRef: 1 }, { unique: true, partialFilterExpression: { 
 farmerSchema.index({ phoneNormalized: 1, status: 1 });
 farmerSchema.index({ state: 1, lga: 1, status: 1 });
 farmerSchema.index({ registeredBy: 1, createdAt: -1 });
+farmerSchema.index({ consentStatus: 1 });
 
 export const Farmer = mongoose.model('Farmer', farmerSchema);
