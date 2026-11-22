@@ -85,23 +85,8 @@ function areaInputs(p) {
   return { state, lga, lists: [h('datalist', { id: `${p}-states` }, options(Object.keys(AREAS))), lgas] };
 }
 
-// sample slip on the sign-in page, fillable for any area
-const sample = { state: 'Nasarawa', lga: 'Awe', community: 'Agwatashi', crop: 'Rice' };
-function renderSlip() {
-  const state = find(Object.keys(AREAS), sample.state) || sample.state.trim();
-  const lga = find(AREAS[state] || [], sample.lga) || sample.lga.trim();
-  $('#slip-location').textContent = [sample.community.trim(), lga && `${lga} LGA`, state].filter(Boolean).join(', ') || 'Not entered';
-  $('#slip-crop').textContent = sample.crop.trim() || 'Not entered';
-}
-function suggestLgas() { $('#lga-list').replaceChildren(...options(AREAS[find(Object.keys(AREAS), sample.state)] || [])); }
 async function initArea() {
   try { AREAS = (await (await fetch('areas.json')).json()).states || {}; } catch { AREAS = {}; }
-  $('#state-list').replaceChildren(...options(Object.keys(AREAS)));
-  for (const [id, key] of [['#ar-state', 'state'], ['#ar-lga', 'lga'], ['#ar-community', 'community'], ['#ar-crop', 'crop']]) {
-    const input = $(id); input.value = sample[key];
-    input.addEventListener('input', () => { sample[key] = input.value; if (key === 'state') suggestLgas(); renderSlip(); });
-  }
-  suggestLgas(); renderSlip();
   $('#ag-states').replaceChildren(...options(Object.keys(AREAS)));
   $('#ag-state').addEventListener('input', () => $('#ag-lgas').replaceChildren(...options(AREAS[find(Object.keys(AREAS), $('#ag-state').value)] || [])));
 }
