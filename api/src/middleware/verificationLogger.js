@@ -1,7 +1,7 @@
 import { VerificationLog } from '../models/VerificationLog.js';
 import { logger } from '../utils/logger.js';
 
-const RESULT_BY_CODE = { 200: 'found', 400: 'invalid', 401: 'unauthorized', 403: 'forbidden', 404: 'not_found', 429: 'rate_limited' };
+const RESULT_BY_CODE = { 200: 'found', 400: 'invalid', 401: 'unauthorized', 403: 'forbidden', 404: 'not_found', 409: 'ambiguous', 429: 'rate_limited' };
 
 // Mounted BEFORE auth so failed/unauthenticated attempts are logged too. Metering comes from these
 // server-side rows, never from client claims (PRD section 10).

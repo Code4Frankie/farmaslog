@@ -226,7 +226,7 @@ SCREENS.approvals = async (el) => {
 };
 
 // ---- consent: text comes from the API; the version and language shown are the ones submitted ----
-const LANG_NAMES = { en: 'English', ha: 'Hausa', yo: 'Yoruba', ig: 'Igbo', pcm: 'Nigerian Pidgin' };
+const LANG_NAMES = { en: 'English', ha: 'Hausa', yo: 'Yoruba', ig: 'Igbo', tiv: 'Tiv', pcm: 'Nigerian Pidgin' };
 const METHODS = [['agent_read_aloud', 'Agent read it aloud'], ['agent_checkbox', 'Farmer read it, agent ticked'], ['self_checkbox', 'Farmer ticked it themselves']];
 const PLACEHOLDER_LABELS = { registeredAddress: 'registered address', email: 'contact email', phone: 'contact phone', whatsapp: 'WhatsApp number', retention: 'retention period', hosting: 'hosting provider/country' };
 function consentWidget() {
@@ -274,17 +274,20 @@ SCREENS.farmers = async (el) => {
   const status = h('select', { id: 'f-status' }, [['', 'All'], ['pending_review', 'Pending review'], ['duplicate_review', 'Possible duplicate'], ['active', 'Approved'], ['rejected', 'Rejected']].map(([v, t]) => h('option', { value: v }, t)));
   const consentFilter = h('select', { id: 'f-consent' }, [['', 'Any'], ['needs_reconsent', 'Needs re-consent'], ['withdrawn', 'Withdrawn']].map(([v, t]) => h('option', { value: v }, t)));
   const box = h('div'); const msg = h('div', { 'aria-live': 'polite' });
-  const act = async (path, body, okText) => {
+  const act = async (path, body, okText, method = 'POST') => {
     msg.replaceChildren();
-    try { await call(path, { method: 'POST', body }); msg.append(note(okText, 'ok')); await load(); } catch (e) { msg.append(fail(e)); }
+    try { await call(path, { method, body }); msg.append(note(okText, 'ok')); await load(); } catch (e) { msg.append(fail(e)); }
   };
   const load = async () => {
     const r = await call(`/v1/farmers?limit=50${status.value ? `&status=${status.value}` : ''}${consentFilter.value ? `&consentStatus=${consentFilter.value}` : ''}`);
     box.replaceChildren(h('p', { class: 'help' }, `Showing ${r.data.length} of ${r.total}.`), r.data.length ? table(['Name', 'Phone', 'Area', 'Status', 'Consent', 'Evidence', ''], r.data.map((f) => [
-      h('span', {}, f.name, f.isSynthetic ? ' (test)' : ''), f.phone, [f.community, f.lga, f.state].filter(Boolean).join(', '), STATUS[f.status] || f.status,
+      h('span', {}, f.name, f.isSynthetic ? ' (test)' : ''),
+      h('span', {}, f.phone || (f.contactVia ? `Contact: ${f.contactVia.name || f.contactVia.type.replaceAll('_', ' ')}${f.contactVia.phone ? ` ${f.contactVia.phone}` : ''}` : 'No phone'), f.sharedPhone ? [' ', h('span', { class: 'badge warn' }, 'Shared phone')] : null),
+      [f.community, f.lga, f.state].filter(Boolean).join(', '), STATUS[f.status] || f.status,
       f.consentStatus === 'withdrawn' ? h('span', { class: 'badge off' }, 'Withdrawn') : f.consentStatus === 'needs_reconsent' ? h('span', { class: 'badge warn' }, 'Needs re-consent') : 'OK',
       f.farm?.evidence ? f.farm.evidence.status.replace('_', ' ') : '',
       h('div', { class: 'btns' },
+        canReview && f.phone ? h('button', { type: 'button', class: 'secondary', onclick: () => act(`/v1/farmers/${f.id}`, { sharedPhone: !f.sharedPhone }, f.sharedPhone ? `${f.name}: phone marked as not shared.` : `${f.name}: phone marked as shared.`, 'PATCH') }, f.sharedPhone ? 'Phone not shared' : 'Phone is shared') : null,
         canVerify ? h('button', { type: 'button', class: 'secondary', onclick: () => recordConsent(f) }, 'Record consent') : null,
         canVerify && f.consentStatus !== 'withdrawn' ? h('button', { type: 'button', class: 'secondary', onclick: async () => {
           if (!confirm(`Withdraw consent for ${f.name}? The record will stop appearing to partners straight away.`)) return;
@@ -320,7 +323,11 @@ SCREENS.farmers = async (el) => {
 SCREENS.register = (el) => {
   const i = (id, attrs = {}) => h('input', { id: `r-${id}`, ...attrs });
   const a = areaInputs('r');
-  const name = i('name', { required: true }); const phone = i('phone', { type: 'tel', required: true, placeholder: '08012345678' });
+  const name = i('name', { required: true }); const phone = i('phone', { type: 'tel', placeholder: '08012345678' });
+  const ctype = h('select', { id: 'r-ctype' }, [['', 'No contact person'], ['relative', 'A relative'], ['cooperative_leader', 'Cooperative or group leader'], ['agent', 'Me (the agent)'], ['farmer', 'Another number for the farmer']].map(([v, t]) => h('option', { value: v }, t)));
+  const cname = i('cname'); const cphone = i('cphone', { type: 'tel', placeholder: '08012345678' }); const crel = i('crel', { placeholder: 'For example: son, aunt, chairman' });
+  const cbox = h('div', { class: 'grid', hidden: true }, field('Contact name', cname), field('Contact phone', cphone, 'Needed unless you are the contact.'), field('Relationship to the farmer', crel));
+  ctype.addEventListener('change', () => { cbox.hidden = !ctype.value; });
   const community = i('community'); const crop = i('crop', { required: true }); const area = i('area', { type: 'number', step: '0.01', min: '0.01' });
   const lat = i('lat', { type: 'number', step: 'any' }); const lng = i('lng', { type: 'number', step: 'any' }); const acc = i('acc', { type: 'number', min: '0' });
   const src = h('select', { id: 'r-src' }, [['farmer_reported', 'Typed in (not confirmed)'], ['gps_field_agent', 'GPS taken at the farm'], ['town_centre', 'Town or village centre']].map(([v, t]) => h('option', { value: v }, t)));
@@ -336,21 +343,27 @@ SCREENS.register = (el) => {
     onsubmit: async (e) => {
       e.preventDefault(); out.replaceChildren();
       if (!cw.valid()) return out.append(note('Tick the first agreement only after the farmer has clearly said yes. If the consent text did not load, check your connection.'));
+      if (!phone.value.trim() && !ctype.value) return out.append(note('Enter the farmer\'s phone number, or choose a contact person who can reach them.'));
+      if (ctype.value && ctype.value !== 'agent' && !cphone.value.trim()) return out.append(note('Enter the contact person\'s phone number.'));
       const body = {
-        name: name.value.trim(), phone: phone.value.trim(), state: a.state.value.trim(), lga: a.lga.value.trim(), community: community.value.trim() || undefined,
+        name: name.value.trim(), ...(phone.value.trim() ? { phone: phone.value.trim() } : {}),
+        ...(ctype.value ? { contactVia: { type: ctype.value, name: cname.value.trim(), phone: cphone.value.trim(), relationship: crel.value.trim() } } : {}),
+        state: a.state.value.trim(), lga: a.lga.value.trim(), community: community.value.trim() || undefined,
         consent: cw.value(), source: user.role === 'field_agent' ? 'field_agent' : 'admin', isSynthetic: test.checked,
         farm: { crop: crop.value.trim(), ...(area.value ? { reportedAreaHa: Number(area.value) } : {}),
           ...(lat.value && lng.value ? { location: { lat: Number(lat.value), lng: Number(lng.value), source: src.value, ...(acc.value ? { accuracyMeters: Number(acc.value) } : {}) } } : {}) },
       };
       try {
         const r = await call('/v1/farmers', { method: 'POST', body });
-        out.append(note(`${r.name}: ${r.message}${r.farmaslogId ? ` FarmasLog ID ${r.farmaslogId}.` : ''}${(r.warnings || []).length ? ` Note: ${r.warnings.join(', ').replaceAll('_', ' ')}.` : ''}`, r.duplicateCandidate ? 'info' : 'ok'));
-        form.reset(); cw.reset();
+        out.append(note(`${r.name}: ${r.message}${r.farmaslogId ? ` FarmasLog ID ${r.farmaslogId}.` : ''}${r.sharedPhone && !r.duplicateCandidate ? ' This phone number is shared with another farmer.' : ''}${(r.warnings || []).length ? ` Note: ${r.warnings.join(', ').replaceAll('_', ' ')}.` : ''}`, r.duplicateCandidate ? 'info' : 'ok'));
+        form.reset(); cw.reset(); cbox.hidden = true;
       } catch (err) { out.append(fail(err)); }
     },
   },
-  h('div', { class: 'grid' }, field('Full name', name), field('Phone number', phone), field('State', a.state), field('Local government area', a.lga), ...a.lists,
+  h('div', { class: 'grid' }, field('Full name', name), field('Phone number', phone, 'Leave empty if the farmer has no phone, and add a contact person below.'), field('State', a.state), field('Local government area', a.lga), ...a.lists,
     field('Community', community), field('Main crop', crop), field('Farm size (hectares)', area, 'What the farmer reports.')),
+  h('h3', {}, 'Contact person (optional if the farmer has a phone)'),
+  field('Who can reach the farmer?', ctype), cbox,
   h('h3', {}, 'Farm location (optional)'),
   h('div', { class: 'grid' }, field('Latitude', lat), field('Longitude', lng), field('Accuracy (metres)', acc), field('Where did the coordinates come from?', src)),
   h('div', { class: 'btns' }, gpsBtn),

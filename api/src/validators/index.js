@@ -1,3 +1,4 @@
+import { CONTACT_TYPES } from '../config/constants.js';
 import { KNOWN_VERSIONS, CURRENT_CONSENT_VERSION, LANGUAGES, CONSENT_METHODS, CONSENT_STATUSES, TEXTS } from '../config/consent.js';
 import Joi from 'joi';
 import { FARMASLOG_ID_RE } from '../utils/ids.js';
@@ -54,9 +55,19 @@ export const consentReferenceSchema = Joi.object({
   version: Joi.string().valid(...Object.keys(TEXTS)),
 });
 
+// Someone who can reach the farmer (a relative, cooperative leader or the agent). A phone is required unless the agent
+// is the contact.
+export const contactViaSchema = Joi.object({
+  type: Joi.string().valid(...CONTACT_TYPES).required(),
+  name: Joi.string().trim().max(120).allow(''),
+  phone: Joi.when('type', { is: 'agent', then: Joi.string().trim().max(25).allow(''), otherwise: Joi.string().trim().max(25).required() }),
+  relationship: Joi.string().trim().max(60).allow(''),
+});
+
 export const registerFarmerSchema = Joi.object({
   name: Joi.string().trim().min(2).max(120).required(),
-  phone: Joi.string().trim().max(25).required(),
+  phone: Joi.string().trim().max(25),
+  contactVia: contactViaSchema,
   state: Joi.string().trim().max(60).required(),
   lga: Joi.string().trim().max(60).required(),
   ward: Joi.string().trim().max(80).allow('', null),
@@ -73,11 +84,13 @@ export const registerFarmerSchema = Joi.object({
     reportedAreaHa: Joi.number().positive().max(100000),
     location,
   }).required(),
-});
+}).or('phone', 'contactVia').messages({ 'object.missing': 'Give the farmer\'s phone number, or a contact person who can reach them (contactVia).' });
 
 export const patchFarmerSchema = Joi.object({
   name: Joi.string().trim().min(2).max(120),
-  phone: Joi.string().trim().max(25),
+  phone: Joi.string().trim().max(25).allow(null, ''), // null/'' removes it (only if a contact person remains)
+  contactVia: contactViaSchema.allow(null),
+  sharedPhone: Joi.boolean(),
   state: Joi.string().trim().max(60),
   lga: Joi.string().trim().max(60),
   ward: Joi.string().trim().max(80).allow(''),

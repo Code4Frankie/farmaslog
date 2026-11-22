@@ -17,7 +17,7 @@ describe('consent texts', () => {
     expect(c.text).toContain('[registered address]');
     expect(c.missingPlaceholders).toEqual(expect.arrayContaining(['email', 'retention', 'hosting']));
   });
-  test.each(['ha', 'yo', 'ig', 'pcm'])('%s is an untranslated placeholder: English is served and flagged', (lang) => {
+  test.each(['ha', 'yo', 'ig', 'tiv', 'pcm'])('%s is an untranslated placeholder: English is served and flagged', (lang) => {
     const c = renderConsent({ language: lang, values: ALL });
     expect(c).toMatchObject({ language: lang, textLanguage: 'en', needsTranslation: true });
   });
@@ -30,7 +30,7 @@ describe('consent texts', () => {
     expect(isLegacyVersion('console-draft-v0')).toBe(true);
     expect(isLegacyVersion(CURRENT_CONSENT_VERSION)).toBe(false);
     expect(isKnownVersion('v1')).toBe(false);
-    expect(LANGUAGES).toEqual(['en', 'ha', 'yo', 'ig', 'pcm']);
+    expect(LANGUAGES).toEqual(['en', 'ha', 'yo', 'ig', 'tiv', 'pcm']);
   });
   test('fillPlaceholders leaves other text alone', () => {
     expect(fillPlaceholders('call {{phone}} now', { phone: '1' }).text).toBe('call 1 now');

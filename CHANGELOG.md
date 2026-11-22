@@ -1,7 +1,16 @@
 # Changelog
 
+## Phase 2: Optional phone, contact person, shared phones
+- A farmer no longer needs a phone. Registration needs the farmer's `phone` OR a `contactVia` (`farmer` | `relative` | `cooperative_leader` | `agent`, with name, phone, relationship). The FarmasLog ID is the identity key. A contact person's number is never used to look the farmer up.
+- A phone may be shared. The "one active farmer per phone" unique index is dropped by a startup migration (`migrations/phone.js`). `sharedPhone` is set automatically on both records when a different person uses the same number, and a data manager can correct it (`PATCH /v1/farmers/:id`).
+- Duplicates are judged on name + LGA + phone together (with no phone: name + LGA + community). A true duplicate goes to duplicate review without an ID; approving it while the original is active is still blocked.
+- `GET /v1/verify` by phone: when several approved records match, it returns `409 MULTIPLE_RECORDS` (not billed, reveals nothing about the records). Add `state`/`lga` or use `farmaslogId`. A single match behaves as before.
+- Phone can be removed with `PATCH {phone: null}` only if a contact person remains.
+- Web: phone optional on the Register screen with a contact-person section; Farmers list shows "Contact: ..." / "No phone", a "Shared phone" tag, and a data-manager "Phone is shared" toggle.
+- Tests: `tests/integration/phone.test.js`. Existing journey/smoke/webform fixtures now use a same-name duplicate.
+
 ## Phase 1: Consent
-- Versioned consent texts in `api/src/config/consent.js` (`consent-v1-draft`; ha/yo/ig/pcm are placeholders and fall back to English). Contact, retention and hosting details come from `CONSENT_*` env vars and show as [bracketed] gaps until set.
+- Versioned consent texts in `api/src/config/consent.js` (`consent-v1-draft`; ha/yo/ig/tiv/pcm are placeholders and fall back to English). Contact, retention and hosting details come from `CONSENT_*` env vars and show as [bracketed] gaps until set.
 - `GET /v1/reference/consent?lang=` (public). Returns `{ version, language, textLanguage, text, sections, agreements, readAloud, incomplete }`.
 - Farmer consent now stores language, method, server `recordedAt`, `recordedBy`, `partnerSharing`, `mediaStorage` and a hash of the text shown. Unknown `wordingVersion` values are rejected.
 - `consentStatus` (`valid` | `needs_reconsent` | `withdrawn`). Startup migration (also `npm run migrate:consent`) flags records using `console-draft-v0` / `qservers-form-v1`. Nothing is deleted or hidden by it.

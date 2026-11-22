@@ -11,7 +11,7 @@ const schema = new mongoose.Schema(
     lookupHash: String,
     result: {
       type: String,
-      enum: ['found', 'not_found', 'invalid', 'unauthorized', 'forbidden', 'rate_limited', 'quota_exceeded', 'error'],
+      enum: ['found', 'not_found', 'invalid', 'unauthorized', 'forbidden', 'ambiguous', 'rate_limited', 'quota_exceeded', 'error'],
     },
     responseCode: Number,
     latencyMs: Number,

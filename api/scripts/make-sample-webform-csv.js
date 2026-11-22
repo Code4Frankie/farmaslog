@@ -18,7 +18,7 @@ const rows = [
   r({ firstName: 'Test', lastName: 'Farmer Seven', phoneNumber: '08000000017', reportedAreaValue: '0' }), // REJECT zero area
   r({ firstName: 'Test', lastName: 'Farmer Eight', phoneNumber: '08000000018', reportedAreaValue: '1', consentStatus: '' }), // REJECT no consent
   r({ firstName: 'Test', lastName: 'Farmer Nine', phoneNumber: '08000000019', reportedAreaValue: '2', latitude: '9.2', longitude: '33.1' }), // coordinates dropped (outside Nigeria)
-  r({ firstName: 'Test', lastName: 'Farmer Ten', phoneNumber: '08000000011', reportedAreaValue: '1' }), // same phone as row 1 -> duplicate_review in the API
+  r({ firstName: 'Test', lastName: 'Farmer One', phoneNumber: '08000000011', reportedAreaValue: '1' }), // same name + LGA + phone as row 1 -> duplicate_review in the API
   r({ firstName: '=HYPERLINK("http://evil.example")', lastName: 'Eleven', phoneNumber: '08000000021', reportedAreaValue: '1' }), // formula characters stripped
   r({ firstName: 'Test', lastName: 'Farmer Twelve', phoneNumber: '08000000022', stateName: 'Plateau', lgaName: 'Jos North', wardOrCommunity: 'Jos', reportedAreaValue: '1' }), // other state: LGA not validated
   r({ firstName: '', lastName: 'Thirteen', phoneNumber: '08000000023', reportedAreaValue: '1' }), // REJECT missing first name

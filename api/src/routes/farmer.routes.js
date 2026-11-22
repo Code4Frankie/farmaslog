@@ -47,7 +47,7 @@ router.post('/', authorize(SUPER_ADMIN, DATA_MANAGER, FIELD_AGENT), validate(reg
     alreadyImported,
     warnings: warnings ?? [],
     message: isDuplicate
-      ? 'A record with this phone number already exists. This submission is held for review and no FarmasLog ID has been issued.'
+      ? 'A record with the same name, local government area and phone number already exists. This submission is held for review and no FarmasLog ID has been issued.'
       : 'Registered. The record is pending review before it can be verified by partners.',
   });
 }));

@@ -34,11 +34,18 @@ export async function verifyFarmer(query, apiKey, vlog) {
   // Withdrawn consent always hides a record; needs_reconsent only when HIDE_NEEDS_RECONSENT is on; a farmer who declined
   // partner sharing is never visible either.
   const hidden = env.consent.hideNeedsReconsent ? ['withdrawn', 'needs_reconsent'] : ['withdrawn'];
-  const farmer = await Farmer.findOne({ ...filter, status: 'active', consentStatus: { $nin: hidden }, 'consent.partnerSharing': { $ne: false } }).lean();
-  if (!farmer || (query.state && !same(farmer.state, query.state)) || (query.lga && !same(farmer.lga, query.lga))) {
+  const candidates = await Farmer.find({ ...filter, status: 'active', consentStatus: { $nin: hidden }, 'consent.partnerSharing': { $ne: false } }).limit(10).lean();
+  const matches = candidates.filter((f) => (!query.state || same(f.state, query.state)) && (!query.lga || same(f.lga, query.lga)));
+  if (!matches.length) {
     vlog.result = 'not_found';
     throw new AppError(404, 'RECORD_NOT_FOUND', 'No matching record is available to this account.');
   }
+  // A phone can be shared. Never guess between records: ask the caller to be more specific (not billed: only 200s are).
+  if (matches.length > 1) {
+    vlog.result = 'ambiguous';
+    throw new AppError(409, 'MULTIPLE_RECORDS', 'More than one record matches this phone number. Please look up by FarmasLog ID, or add state and LGA to narrow it down.');
+  }
+  const farmer = matches[0];
   const farm = await Farm.findOne({ farmerId: farmer._id }).lean();
   const evidenceStatus = farm?.evidence?.status ?? 'pending';
   vlog.result = 'found';

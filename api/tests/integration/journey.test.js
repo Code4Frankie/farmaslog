@@ -51,8 +51,8 @@ describe('Micheal registers, Nancy verifies', () => {
     expect((await verify({ farmaslogId })).status).toBe(404);
   });
 
-  test('a second registration with the same phone goes to duplicate review without an ID', async () => {
-    const r = await request(app).post('/v1/farmers').set('Authorization', `Bearer ${agent}`).send(registration({ name: 'Someone Else' }));
+  test('a second registration with the same name, LGA and phone goes to duplicate review without an ID', async () => {
+    const r = await request(app).post('/v1/farmers').set('Authorization', `Bearer ${agent}`).send(registration());
     expect(r.status).toBe(201);
     expect(r.body.duplicateCandidate).toBe(true);
     expect(r.body.status).toBe('duplicate_review');

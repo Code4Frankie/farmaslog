@@ -10,8 +10,8 @@ export const CURRENT_CONSENT_VERSION = 'consent-v1-draft';
 export const LEGACY_VERSIONS = ['console-draft-v0', 'qservers-form-v1'];
 export const KNOWN_VERSIONS = [CURRENT_CONSENT_VERSION, ...LEGACY_VERSIONS];
 
-export const LANGUAGES = ['en', 'ha', 'yo', 'ig', 'pcm'];
-export const LANGUAGE_NAMES = { en: 'English', ha: 'Hausa', yo: 'Yoruba', ig: 'Igbo', pcm: 'Nigerian Pidgin' };
+export const LANGUAGES = ['en', 'ha', 'yo', 'ig', 'tiv', 'pcm'];
+export const LANGUAGE_NAMES = { en: 'English', ha: 'Hausa', yo: 'Yoruba', ig: 'Igbo', tiv: 'Tiv', pcm: 'Nigerian Pidgin' };
 export const CONSENT_METHODS = ['agent_read_aloud', 'agent_checkbox', 'self_checkbox'];
 export const CONSENT_STATUSES = ['valid', 'needs_reconsent', 'withdrawn'];
 
@@ -51,7 +51,7 @@ const EN_V1 = {
 // is removed the API serves the English text (textLanguage 'en') so no unreviewed translation is ever shown.
 const todo = { needsTranslation: true };
 export const TEXTS = {
-  [CURRENT_CONSENT_VERSION]: { en: EN_V1, ha: todo, yo: todo, ig: todo, pcm: todo },
+  [CURRENT_CONSENT_VERSION]: { en: EN_V1, ha: todo, yo: todo, ig: todo, tiv: todo, pcm: todo },
 };
 
 const esc = (s) => String(s);

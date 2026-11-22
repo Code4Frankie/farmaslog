@@ -21,6 +21,7 @@ export const SCOPE_LIST = Object.values(SCOPES);
 
 export const EVIDENCE_STATUS = ['pending', 'self_reported', 'satellite_signal', 'field_verified', 'needs_review'];
 export const ENRICHMENT_STATE = ['not_assessed', 'pending', 'completed', 'insufficient_imagery', 'failed'];
+export const CONTACT_TYPES = ['farmer', 'relative', 'cooperative_leader', 'agent'];
 export const FARMER_STATUS = ['pending_review', 'active', 'duplicate_review', 'rejected'];
 export const FARMER_SOURCE = ['self_registration', 'field_agent', 'admin', 'import'];
 export const LOCATION_SOURCE = ['gps_field_agent', 'farmer_pin', 'farmer_reported', 'geocoded', 'town_centre'];

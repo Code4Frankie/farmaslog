@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { FARMER_STATUS, FARMER_SOURCE } from '../config/constants.js';
+import { FARMER_STATUS, FARMER_SOURCE, CONTACT_TYPES } from '../config/constants.js';
 import { CONSENT_METHODS, CONSENT_STATUSES } from '../config/consent.js';
 
 const { Schema } = mongoose;
@@ -8,7 +8,18 @@ const farmerSchema = new Schema(
   {
     farmaslogId: { type: String, default: undefined },
     name: { type: String, required: true, trim: true },
-    phoneNormalized: { type: String, required: true },
+    // Optional: the FarmasLog ID is the identity key. A record needs the farmer's phone OR a contactVia.
+    phoneNormalized: { type: String },
+    // Several farmers may share one phone (set automatically when a second record uses the number; editable by a data manager).
+    sharedPhone: { type: Boolean, default: false },
+    // Someone who can reach the farmer. Their number is NOT used to look the farmer up or to unlock the record.
+    contactVia: {
+      type: { type: String, enum: CONTACT_TYPES },
+      name: { type: String, trim: true },
+      phoneNormalized: String,
+      relationship: { type: String, trim: true },
+      _id: false,
+    },
     state: { type: String, required: true, trim: true },
     lga: { type: String, required: true, trim: true },
     ward: { type: String, trim: true },
@@ -49,8 +60,8 @@ const farmerSchema = new Schema(
 
 // An ID is only issued once dedup checks pass, so it is optional but unique when present.
 farmerSchema.index({ farmaslogId: 1 }, { unique: true, partialFilterExpression: { farmaslogId: { $type: 'string' } } });
-// Only one ACTIVE record per phone. Duplicate candidates wait in review; nothing is merged silently.
-farmerSchema.index({ phoneNormalized: 1 }, { unique: true, partialFilterExpression: { status: 'active' } });
+// A phone may be shared, so it is no longer unique. Duplicates are judged on name + LGA + phone together and wait in
+// review; nothing is merged silently. (The old unique index is dropped by migrations/phone.js.)
 farmerSchema.index({ sourceRef: 1 }, { unique: true, partialFilterExpression: { sourceRef: { $type: 'string' } } });
 farmerSchema.index({ phoneNormalized: 1, status: 1 });
 farmerSchema.index({ state: 1, lga: 1, status: 1 });

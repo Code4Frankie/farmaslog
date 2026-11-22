@@ -18,7 +18,7 @@ export const openapi = {
       get: {
         tags: ['Verification'],
         summary: 'Verify a farmer record (partner API key)',
-        description: 'Provide exactly one of `phone` or `farmaslogId`. `state` and `lga` optionally narrow the match. Billable only on 200.',
+        description: 'Provide exactly one of `phone` or `farmaslogId`. `state` and `lga` optionally narrow the match. A phone number can be shared by several farmers: when more than one approved record matches you get 409 `MULTIPLE_RECORDS` (never a guess). Retry with `farmaslogId`, or add `state`/`lga`. Billable only on 200.',
         security: [{ apiKey: [] }],
         parameters: [
           { name: 'phone', in: 'query', schema: { type: 'string' }, example: '08000000001', description: 'Nigerian mobile number in any common format.' },
@@ -32,6 +32,7 @@ export const openapi = {
           401: err('Missing or invalid API key'),
           403: err('Key lacks scope, or partner suspended'),
           404: err('No matching record available to caller'),
+          409: err('MULTIPLE_RECORDS: several approved records share this phone. Use farmaslogId or add state/lga. Not billed.'),
           429: err('Rate limit or free-plan quota exceeded (see retryAfterSeconds)'),
         },
       },
@@ -56,7 +57,7 @@ export const openapi = {
         tags: ['Reference'], summary: 'Farmer consent text (public)',
         description: 'Returns the versioned consent text and the agent read-aloud script. Languages without a reviewed translation are served in English (`textLanguage` says what was actually returned, `needsTranslation` is true). `incomplete` is true while the operator has not filled the contact/retention/hosting details.',
         parameters: [
-          { name: 'lang', in: 'query', schema: { type: 'string', enum: ['en', 'ha', 'yo', 'ig', 'pcm'], default: 'en' } },
+          { name: 'lang', in: 'query', schema: { type: 'string', enum: ['en', 'ha', 'yo', 'ig', 'tiv', 'pcm'], default: 'en' } },
           { name: 'version', in: 'query', schema: { type: 'string', example: 'consent-v1-draft' } },
         ],
         responses: { 200: { description: 'Consent text', content: { 'application/json': { schema: { $ref: '#/components/schemas/ConsentText' } } } }, 400: err('Unknown language or version') },
@@ -82,7 +83,7 @@ export const openapi = {
     '/v1/farmers': {
       post: {
         tags: ['Farmers'], summary: 'Register a farmer and farm (field agent / data manager / admin)', security: bearerJwt,
-        description: 'Consent is required. A matching active/pending phone number sends the record to duplicate review and withholds the FarmasLog ID.',
+        description: 'Consent is required, and so is either `phone` or `contactVia` (a person who can reach the farmer). The FarmasLog ID, not the phone, identifies the farmer. A phone may be shared: a different person on the same number is registered normally and both records get `sharedPhone: true`. Only the same name + LGA + phone (or, with no phone, name + LGA + community) is a duplicate: it goes to duplicate review and the FarmasLog ID is withheld.',
         requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/RegisterFarmer' } } } },
         responses: { 201: { description: 'Registered (pending review)' }, 400: err('Validation error'), 403: err('Role not allowed') },
       },
@@ -95,14 +96,14 @@ export const openapi = {
     '/v1/farmers/{id}': {
       parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
       get: { tags: ['Farmers'], summary: 'Get one farmer', security: bearerJwt, responses: { 200: { description: 'Farmer and farm' }, 404: err('Not found') } },
-      patch: { tags: ['Farmers'], summary: 'Update (audited)', security: bearerJwt, responses: { 200: { description: 'Updated' }, 409: err('Phone already in use') } },
+      patch: { tags: ['Farmers'], summary: 'Update (audited; data manager / super admin)', security: bearerJwt, description: 'Send `phone: null` to remove the phone (a `contactVia` must remain). `sharedPhone` can be corrected by hand here.', requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { name: { type: 'string' }, phone: { type: 'string', nullable: true }, contactVia: { $ref: '#/components/schemas/ContactVia' }, sharedPhone: { type: 'boolean' }, state: { type: 'string' }, lga: { type: 'string' }, ward: { type: 'string' }, community: { type: 'string' } } } } } }, responses: { 200: { description: 'Updated' }, 400: err('Invalid phone, or a farmer would be left with no phone and no contact person') } },
     },
     '/v1/farmers/{id}/review': {
       post: {
         tags: ['Farmers'], summary: 'Approve or reject a pending/duplicate record', security: bearerJwt,
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['decision'], properties: { decision: { type: 'string', enum: ['approve', 'reject'] }, note: { type: 'string' } } } } } },
-        responses: { 200: { description: 'Reviewed' }, 409: err('Invalid state or duplicate phone') },
+        responses: { 200: { description: 'Reviewed' }, 409: err('Invalid state, or an active record with the same name, LGA and phone already exists') },
       },
     },
     '/v1/farmers/{id}/field-verification': {
@@ -210,7 +211,7 @@ export const openapi = {
         properties: {
           given: { type: 'boolean', enum: [true] },
           wordingVersion: { type: 'string', enum: ['consent-v1-draft', 'console-draft-v0', 'qservers-form-v1'] },
-          language: { type: 'string', enum: ['en', 'ha', 'yo', 'ig', 'pcm'], default: 'en' },
+          language: { type: 'string', enum: ['en', 'ha', 'yo', 'ig', 'tiv', 'pcm'], default: 'en' },
           method: { type: 'string', enum: ['agent_read_aloud', 'agent_checkbox', 'self_checkbox'] },
           partnerSharing: { type: 'boolean', description: 'Second agreement box. If false the record is never returned to partners.' },
           mediaStorage: { type: 'boolean', default: false, description: 'Optional third agreement box (photos/documents).' },
@@ -229,11 +230,17 @@ export const openapi = {
           missingPlaceholders: { type: 'array', items: { type: 'string' } },
         },
       },
+      ContactVia: {
+        type: 'object', required: ['type'], nullable: true,
+        description: 'A person who can reach the farmer. Their number is never used to look the farmer up. `phone` is required unless `type` is `agent`.',
+        properties: { type: { type: 'string', enum: ['farmer', 'relative', 'cooperative_leader', 'agent'] }, name: { type: 'string' }, phone: { type: 'string' }, relationship: { type: 'string' } },
+      },
       RegisterFarmer: {
         type: 'object',
-        required: ['name', 'phone', 'state', 'lga', 'consent', 'farm'],
+        required: ['name', 'state', 'lga', 'consent', 'farm'],
+        description: 'Provide `phone` and/or `contactVia`: at least one is required.',
         properties: {
-          name: { type: 'string' }, phone: { type: 'string' }, state: { type: 'string' }, lga: { type: 'string' },
+          name: { type: 'string' }, phone: { type: 'string' }, contactVia: { $ref: '#/components/schemas/ContactVia' }, state: { type: 'string' }, lga: { type: 'string' },
           ward: { type: 'string' }, community: { type: 'string' },
           consent: { $ref: '#/components/schemas/ConsentInput' },
           farm: { type: 'object', required: ['crop'], properties: { crop: { type: 'string' }, reportedAreaHa: { type: 'number' }, location: { type: 'object', properties: { lat: { type: 'number' }, lng: { type: 'number' }, source: { type: 'string' }, accuracyMeters: { type: 'number' } } } } },

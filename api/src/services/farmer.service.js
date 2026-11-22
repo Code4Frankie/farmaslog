@@ -17,6 +17,49 @@ async function allocateFarmaslogId() {
   throw new AppError(500, 'ID_ALLOCATION_FAILED', 'Could not allocate a unique FarmasLog ID.');
 }
 
+const norm = (s) => String(s ?? '').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
+const OPEN = ['active', 'pending_review'];
+
+/**
+ * Is this the SAME person as an existing record? Judged on name + LGA + phone together, never the phone alone (a phone
+ * may be shared). Without a phone: name + LGA + community. Returns the matching record or null. Never merges anything.
+ */
+async function findSameFarmer({ name, lga, phone, community, excludeId, statuses = OPEN }) {
+  const base = { status: { $in: statuses }, ...(excludeId ? { _id: { $ne: excludeId } } : {}) };
+  const n = norm(name);
+  const l = norm(lga);
+  if (phone) {
+    const rows = await Farmer.find({ ...base, phoneNormalized: phone }).select('name lga').limit(50).lean();
+    return rows.find((r) => norm(r.name) === n && norm(r.lga) === l) ?? null;
+  }
+  const rows = await Farmer.find({ ...base, lga, name }).collation({ locale: 'en', strength: 2 }).select('name lga community phoneNormalized').limit(50).lean();
+  return rows.find((r) => norm(r.name) === n && norm(r.community) === norm(community)) ?? null;
+}
+
+/** A second (different) farmer on the same phone: flag both as sharing it. Returns true when the phone is shared. */
+async function flagSharedPhone(farmer, ctx) {
+  if (!farmer.phoneNormalized) return false;
+  const others = await Farmer.find({ _id: { $ne: farmer._id }, phoneNormalized: farmer.phoneNormalized, status: { $ne: 'rejected' } });
+  if (!others.length) return false;
+  for (const o of others) {
+    if (o.sharedPhone) continue;
+    o.sharedPhone = true;
+    await o.save();
+    await writeAudit(ctx, { action: 'farmer.shared_phone_flagged', entityType: 'Farmer', entityId: o._id, changes: { sharedPhone: { from: false, to: true } } });
+  }
+  return true;
+}
+
+function buildContact(c) {
+  if (!c) return undefined;
+  let phone;
+  if (c.phone) {
+    phone = normalizeNigerianPhone(c.phone);
+    if (!phone) throw new AppError(400, 'INVALID_PHONE', 'Enter a valid Nigerian mobile number for the contact person.');
+  }
+  return { type: c.type, name: c.name || undefined, phoneNormalized: phone, relationship: c.relationship || undefined };
+}
+
 const buildLocation = (l) => ({
   lat: l.lat, lng: l.lng, source: l.source, accuracyMeters: l.accuracyMeters,
   collectedAt: l.collectedAt || new Date(), provider: l.provider,
@@ -33,17 +76,22 @@ export async function registerFarmer(input, ctx) {
       return { farmer: existing, farm: await Farm.findOne({ farmerId: existing._id }), isDuplicate: existing.status === 'duplicate_review', alreadyImported: true };
     }
   }
-  const phone = normalizeNigerianPhone(input.phone);
-  if (!phone) throw new AppError(400, 'INVALID_PHONE', 'Enter a valid Nigerian mobile number.');
+  let phone;
+  if (input.phone) {
+    phone = normalizeNigerianPhone(input.phone);
+    if (!phone) throw new AppError(400, 'INVALID_PHONE', 'Enter a valid Nigerian mobile number.');
+  }
+  const contactVia = buildContact(input.contactVia);
+  if (!phone && !contactVia) throw new AppError(400, 'CONTACT_REQUIRED', 'Give the farmer\'s phone number, or a contact person who can reach them.');
   const area = canonicalArea(input.state, input.lga); // any state/LGA is accepted; names matching the national list are tidied
 
-  // Duplicate candidates are flagged for human review. Nothing is merged or overwritten silently.
-  const candidate = await Farmer.exists({ phoneNormalized: phone, status: { $in: ['active', 'pending_review'] } });
+  // Duplicate candidates (same name + LGA + phone) are flagged for human review. Nothing is merged or overwritten silently.
+  const candidate = await findSameFarmer({ name: input.name, lga: area.lga, phone, community: input.community });
   const isDuplicate = !!candidate;
 
   const farmer = await Farmer.create({
     farmaslogId: isDuplicate ? undefined : await allocateFarmaslogId(),
-    name: input.name, phoneNormalized: phone,
+    name: input.name, phoneNormalized: phone, contactVia,
     state: area.state, lga: area.lga, ward: input.ward || undefined, community: input.community || undefined,
     ...buildConsentRecord({ ...input.consent, capturedAt: input.submittedAt }, ctx),
     source: input.source || 'field_agent',
@@ -72,11 +120,17 @@ export async function registerFarmer(input, ctx) {
     throw err;
   }
 
-  await writeAudit(ctx, { action: 'farmer.registered', entityType: 'Farmer', entityId: farmer._id, changes: { status: farmer.status, source: farmer.source, duplicateCandidate: isDuplicate } });
+  // A different person on a number that is already in use: mark the phone as shared on both records.
+  let sharedPhone = false;
+  if (!isDuplicate) {
+    sharedPhone = await flagSharedPhone(farmer, ctx);
+    if (sharedPhone) { farmer.sharedPhone = true; await farmer.save(); }
+  }
+  await writeAudit(ctx, { action: 'farmer.registered', entityType: 'Farmer', entityId: farmer._id, changes: { status: farmer.status, source: farmer.source, duplicateCandidate: isDuplicate, sharedPhone, hasPhone: !!phone, contactType: contactVia?.type ?? null } });
   return { farmer, farm, isDuplicate, alreadyImported: false, warnings: area.warnings };
 }
 
-const PII = new Set(['name', 'phone', 'location']);
+const PII = new Set(['name', 'phone', 'location', 'contactVia']);
 const redact = (changes) => Object.fromEntries(Object.entries(changes).map(([k, v]) => [k, PII.has(k) ? { changed: true } : v]));
 
 export async function updateFarmer(farmer, input, ctx) {
@@ -93,15 +147,28 @@ export async function updateFarmer(farmer, input, ctx) {
       farmer[k] = input[k];
     }
   }
+  if (input.contactVia !== undefined) {
+    farmer.contactVia = input.contactVia ? buildContact(input.contactVia) : undefined;
+    changes.contactVia = { changed: true };
+  }
   if (input.phone !== undefined) {
-    const p = normalizeNigerianPhone(input.phone);
-    if (!p) throw new AppError(400, 'INVALID_PHONE', 'Enter a valid Nigerian mobile number.');
-    if (p !== farmer.phoneNormalized) {
-      const clash = await Farmer.exists({ _id: { $ne: farmer._id }, phoneNormalized: p, status: { $in: ['active', 'pending_review'] } });
-      if (clash) throw new AppError(409, 'DUPLICATE_PHONE', 'Another record already uses this phone number. Review it before changing this one.');
+    const p = input.phone ? normalizeNigerianPhone(input.phone) : undefined;
+    if (input.phone && !p) throw new AppError(400, 'INVALID_PHONE', 'Enter a valid Nigerian mobile number.');
+    if (p !== (farmer.phoneNormalized ?? undefined)) {
       farmer.phoneNormalized = p;
       changes.phone = { changed: true };
+      farmer.sharedPhone = false; // recomputed below
     }
+  }
+  if (!farmer.phoneNormalized && !farmer.contactVia?.type) {
+    throw new AppError(400, 'CONTACT_REQUIRED', 'A farmer needs a phone number or a contact person. Add a contact person before removing the phone.');
+  }
+  if (input.sharedPhone !== undefined && input.sharedPhone !== !!farmer.sharedPhone) {
+    changes.sharedPhone = { from: !!farmer.sharedPhone, to: input.sharedPhone };
+    farmer.sharedPhone = input.sharedPhone;
+  } else if (changes.phone && farmer.phoneNormalized) {
+    // A phone just set or changed: do other (different) records already use it?
+    if (await flagSharedPhone(farmer, ctx)) { farmer.sharedPhone = true; changes.sharedPhone = { from: false, to: true }; }
   }
   if (input.farm && farm) {
     const f = input.farm;
@@ -133,12 +200,13 @@ export async function reviewFarmer(farmer, { decision, note }, ctx) {
     farmer.status = 'rejected';
   } else {
     if (farmer.consentStatus === 'withdrawn') throw new AppError(409, 'CONSENT_WITHDRAWN', 'Consent was withdrawn for this record. Record fresh consent before approving it.');
-    const clash = await Farmer.exists({ _id: { $ne: farmer._id }, phoneNormalized: farmer.phoneNormalized, status: 'active' });
+    const clash = await findSameFarmer({ name: farmer.name, lga: farmer.lga, phone: farmer.phoneNormalized, community: farmer.community, excludeId: farmer._id, statuses: ['active'] });
     if (clash) {
-      throw new AppError(409, 'DUPLICATE_PHONE', 'An active record already has this phone number. Reject this record or correct the existing one; records are never merged automatically.');
+      throw new AppError(409, 'DUPLICATE_PHONE', 'An active record already has the same name, LGA and phone. Reject this record or correct the existing one; records are never merged automatically.');
     }
     if (!farmer.farmaslogId) farmer.farmaslogId = await allocateFarmaslogId();
     farmer.status = 'active';
+    if (await flagSharedPhone(farmer, ctx)) farmer.sharedPhone = true;
   }
   farmer.reviewedBy = ctx.actor?.id;
   farmer.reviewedAt = new Date();

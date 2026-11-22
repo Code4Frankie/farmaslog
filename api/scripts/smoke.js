@@ -56,8 +56,8 @@ const farmer = await call('POST', '/v1/farmers', { token: agent, body: reg(`Smok
 if (!check('register synthetic farmer (pending review, FarmasLog ID issued)', farmer.status === 201 && farmer.body?.status === 'pending_review' && /^FL-/.test(farmer.body?.farmaslogId || ''), `${farmer.status} ${JSON.stringify(farmer.body)}`)) stop('registration failed (is ALLOW_SYNTHETIC enabled on this deployment?)');
 const { id, farmaslogId } = farmer.body;
 
-const dup = await call('POST', '/v1/farmers', { token: agent, body: reg('Someone Else') });
-check('same phone is held for duplicate review, no ID issued', dup.status === 201 && dup.body?.duplicateCandidate === true && dup.body?.farmaslogId === null, JSON.stringify(dup.body));
+const dup = await call('POST', '/v1/farmers', { token: agent, body: reg(`Smoke Farmer ${tag}`) });
+check('same name, LGA and phone is held for duplicate review, no ID issued', dup.status === 201 && dup.body?.duplicateCandidate === true && dup.body?.farmaslogId === null, JSON.stringify(dup.body));
 
 check('partner cannot see a pending record (404)', (await call('GET', '/v1/verify', { key: apiKey, query: { phone } })).status === 404);
 check('field agent cannot approve (403)', (await call('POST', `/v1/farmers/${id}/review`, { token: agent, body: { decision: 'approve' } })).status === 403);

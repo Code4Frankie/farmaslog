@@ -218,3 +218,4 @@ body.in-app .how { display: none; }
 .sample-photo li { padding-left: 1.4rem; position: relative; }
 .sample-photo li::before { content: ""; position: absolute; left: 0; top: .45em; width: .8rem; height: .8rem; border-radius: 50%; background: var(--sun); box-shadow: inset 0 0 0 3px #143f2c; border: 2px solid var(--sun); }
 @media (min-width: 900px) { .sample-photo { min-height: 26rem; height: 100%; } .sample-grid { align-items: stretch; } }
+[hidden] { display: none !important; }
