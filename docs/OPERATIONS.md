@@ -43,3 +43,5 @@ Farmers prove they control a phone number with a 6-digit code sent by text messa
 **Limits**: 10 code requests and 30 checks per IP per 15 minutes; per phone, one code every 30 seconds and 3 per hour; 5 wrong tries kill a code; a code lasts 10 minutes. Change with the `OTP_*` variables.
 
 **Privacy**: the phone number and code are never logged or stored in the clear (only keyed hashes). Audit entries hold the purpose and a short hash reference. The API answers the same for numbers that are on FarmasLog and numbers that are not.
+
+**Website (Vercel)**: add `FARMASLOG_TURNSTILE_SITE_KEY` (the Turnstile *site* key, which is public) in the Vercel project settings, then redeploy with `cd web && npx vercel --prod`. Without it the farmer form shows no security check, and in production the API will refuse code requests (captcha required). Self-registered farmers appear in the Farmers list as "Pending review" with source `self_registration`; approve them like any other record.

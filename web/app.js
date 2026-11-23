@@ -61,6 +61,17 @@ async function demoApi(path, body, token) {
     return { message: 'Application received.' };
   }
   if (path === '/v1/auth/me' && token === 'demo') return { user: DEMO_USER };
+  if (path === '/v1/public/otp/request') return { status: 'sent_if_valid', resendAfterSeconds: 30 };
+  if (path === '/v1/public/otp/verify') {
+    if (body.code !== '123456') throw new ApiError(400, 'INVALID_CODE', 'That code is not right or has expired. Request a new one.');
+    return { phoneProof: 'demo-proof', expiresInSeconds: 900 };
+  }
+  if (path === '/v1/public/registrations') return { status: 'received', reference: 'DEMO2345' };
+  if (path.startsWith('/v1/reference/consent')) {
+    return { version: 'consent-v1-draft', language: 'en', textLanguage: 'en', needsTranslation: false, incomplete: false, missingPlaceholders: [], title: 'Your information and FarmasLog',
+      sections: [{ heading: 'What we keep.', body: 'Your name, phone number, where your farm is and what you grow.' }, { heading: 'Who sees it.', body: 'Approved banks, programmes and agencies can check whether your record exists. You can withdraw at any time.' }],
+      readAloud: '', agentNote: '', agreementsIntro: 'Please tick to agree:' };
+  }
   throw new ApiError(404, 'NOT_AVAILABLE', 'Demo mode has no server. Set FARMASLOG_API_URL to use this screen.');
 }
 // Signed-in calls: an expired session sends the person back to sign in.
@@ -229,7 +240,7 @@ SCREENS.approvals = async (el) => {
 const LANG_NAMES = { en: 'English', ha: 'Hausa', yo: 'Yoruba', ig: 'Igbo', tiv: 'Tiv', pcm: 'Nigerian Pidgin' };
 const METHODS = [['agent_read_aloud', 'Agent read it aloud'], ['agent_checkbox', 'Farmer read it, agent ticked'], ['self_checkbox', 'Farmer ticked it themselves']];
 const PLACEHOLDER_LABELS = { registeredAddress: 'registered address', email: 'contact email', phone: 'contact phone', whatsapp: 'WhatsApp number', retention: 'retention period', hosting: 'hosting provider/country' };
-function consentWidget() {
+function consentWidget({ self = false } = {}) {
   const wrap = h('div', { class: 'consent' });
   const lang = h('select', { id: 'c-lang' }, Object.entries(LANG_NAMES).map(([v, t]) => h('option', { value: v }, t)));
   const method = h('select', { id: 'c-method' }, METHODS.map(([v, t]) => h('option', { value: v }, t)));
@@ -246,8 +257,8 @@ function consentWidget() {
       data.incomplete ? note(`This consent text is incomplete: ${data.missingPlaceholders.map((k) => PLACEHOLDER_LABELS[k] || k).join(', ')} not set yet. Do not use it with real farmers until the operator fills these in.`) : null,
       h('h3', {}, data.title),
       ...data.sections.map((s) => h('p', {}, h('strong', {}, s.heading), ' ', s.body)),
-      h('div', { class: 'btns' }, h('button', { type: 'button', class: 'secondary', onclick: () => { showScript = !showScript; render(); } }, showScript ? 'Hide read-aloud script' : 'Show read-aloud script')),
-      showScript ? script : null,
+      self ? null : h('div', { class: 'btns' }, h('button', { type: 'button', class: 'secondary', onclick: () => { showScript = !showScript; render(); } }, showScript ? 'Hide read-aloud script' : 'Show read-aloud script')),
+      showScript && !self ? script : null,
       h('p', {}, h('strong', {}, data.agreementsIntro)));
   };
   const load = async () => {
@@ -258,11 +269,11 @@ function consentWidget() {
     h('div', { class: 'check' }, core, h('label', { for: 'c-core' }, 'I have read, or had read to me, how FarmasLog will use my information, and I agree to it.')),
     h('div', { class: 'check' }, share, h('label', { for: 'c-share' }, 'I agree that approved partners can check whether my record exists and see the information described above.')),
     h('div', { class: 'check' }, media, h('label', { for: 'c-media' }, '(Optional) I agree that FarmasLog may keep photos or documents I give to support my record.')),
-    field('How was consent given?', method));
+    ...(self ? [] : [field('How was consent given?', method)]));
   return {
     el: wrap, ready: load(),
     // The farmer-facing agreement labels come from the API when available (kept in sync with the displayed text).
-    value: () => ({ given: core.checked, wordingVersion: data?.version, language: lang.value, method: method.value, partnerSharing: share.checked, mediaStorage: media.checked }),
+    value: () => ({ given: core.checked, wordingVersion: data?.version, language: lang.value, method: self ? 'self_checkbox' : method.value, partnerSharing: share.checked, mediaStorage: media.checked }),
     valid: () => !!data && core.checked,
     reset: () => { core.checked = share.checked = media.checked = false; },
   };
@@ -553,6 +564,130 @@ bind($('#form-agent'), async (f) => {
   $('#form-agent').hidden = true; $('#agent-done').hidden = false;
 });
 $('#signout').addEventListener('click', signOut);
+// ---- farmers register themselves: phone code, details, consent ----
+const TURNSTILE_KEY = cfg.turnstileSiteKey || '';
+let turnstileLoading;
+const loadTurnstile = () => turnstileLoading ??= new Promise((resolve, reject) => {
+  if (window.turnstile) return resolve(window.turnstile);
+  const s = document.createElement('script');
+  s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'; s.async = true;
+  s.onload = () => resolve(window.turnstile); s.onerror = () => { turnstileLoading = null; reject(new Error('captcha')); };
+  document.head.append(s);
+});
+
+async function farmerSignup() {
+  await areasReady;
+  const root = $('#farmer-form');
+  const state = { phone: '', proof: '', token: '' };
+  const step = (...kids) => root.replaceChildren(...kids);
+
+  // 1. phone
+  function stepPhone(msgNode) {
+    const phone = h('input', { id: 'fs-phone', type: 'tel', inputmode: 'tel', autocomplete: 'tel', placeholder: '08012345678', value: state.phone });
+    const out = h('div', { 'aria-live': 'polite' }, msgNode || null);
+    const cap = h('div', { class: 'captcha' });
+    let widgetId = null;
+    const send = h('button', { type: 'submit', class: 'primary' }, 'Send me a code');
+    if (TURNSTILE_KEY) loadTurnstile().then((t) => { widgetId = t.render(cap, { sitekey: TURNSTILE_KEY, callback: (tok) => { state.token = tok; } }); }).catch(() => out.replaceChildren(note('The security check could not load. Check your connection and refresh.')));
+    step(h('h3', {}, 'Step 1 of 3: your phone number'),
+      h('p', { class: 'help' }, 'We send a 6-digit code by text message to make sure the number is yours. Normal text rates may apply.'),
+      h('form', {
+        novalidate: true,
+        onsubmit: async (e) => {
+          e.preventDefault(); out.replaceChildren(); send.disabled = true;
+          state.phone = phone.value.trim();
+          try {
+            if (!state.phone) throw new ApiError(400, 'VALIDATION_ERROR', 'Enter your phone number.');
+            if (TURNSTILE_KEY && !state.token) throw new ApiError(400, 'CAPTCHA_FAILED', 'Please complete the security check first.');
+            await api('/v1/public/otp/request', { method: 'POST', body: { phone: state.phone, purpose: 'register', captchaToken: state.token } });
+            stepCode();
+          } catch (err) { out.replaceChildren(fail(err)); if (widgetId !== null) { window.turnstile?.reset(widgetId); state.token = ''; } send.disabled = false; }
+        },
+      }, field('Your phone number', phone), cap, h('div', { class: 'btns' }, send)), out);
+  }
+
+  // 2. code
+  function stepCode() {
+    const code = h('input', { id: 'fs-code', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: 6, pattern: '[0-9]{6}', placeholder: '6-digit code' });
+    const out = h('div', { 'aria-live': 'polite' });
+    const go = h('button', { type: 'submit', class: 'primary' }, 'Check code');
+    step(h('h3', {}, 'Step 2 of 3: enter the code'),
+      h('p', { class: 'help' }, `If ${state.phone} is a valid number, a code is on its way. It can take a minute.`),
+      h('form', {
+        novalidate: true,
+        onsubmit: async (e) => {
+          e.preventDefault(); out.replaceChildren(); go.disabled = true;
+          try {
+            const r = await api('/v1/public/otp/verify', { method: 'POST', body: { phone: state.phone, purpose: 'register', code: code.value.trim() } });
+            state.proof = r.phoneProof; stepDetails();
+          } catch (err) { out.replaceChildren(fail(err)); go.disabled = false; }
+        },
+      }, field('Code from the text message', code), h('div', { class: 'btns' }, go, h('button', { type: 'button', class: 'secondary', onclick: () => { state.token = ''; stepPhone(); } }, 'Use a different number or send a new code'))), out);
+    code.focus();
+  }
+
+  // 3. details + consent
+  function stepDetails() {
+    const a = areaInputs('fs');
+    const i = (id, attrs = {}) => h('input', { id: `fs-${id}`, ...attrs });
+    const name = i('name', { required: true, autocomplete: 'name' }); const community = i('community'); const crop = i('crop', { required: true, placeholder: 'For example: maize, yam, rice' });
+    const size = i('size', { type: 'number', step: '0.01', min: '0.01', inputmode: 'decimal' });
+    const sel = (id, opts) => h('select', { id }, [['', 'Skip'], ...opts].map(([v, t]) => h('option', { value: v }, t)));
+    const gender = sel('fs-gender', [['female', 'Female'], ['male', 'Male'], ['other', 'Other'], ['prefer_not_to_say', 'Prefer not to say']]);
+    const age = sel('fs-age', [['18_24', '18 to 24'], ['25_34', '25 to 34'], ['35_44', '35 to 44'], ['45_54', '45 to 54'], ['55_64', '55 to 64'], ['65_plus', '65 or older'], ['prefer_not_to_say', 'Prefer not to say']]);
+    const dis = sel('fs-dis', [['none', 'No'], ['yes', 'Yes'], ['prefer_not_to_say', 'Prefer not to say']]);
+    let pos = null;
+    const posNote = h('p', { class: 'help' }, 'Optional: share your phone\'s location if you are at your farm now. It helps banks and programmes find it.');
+    const posBtn = h('button', { type: 'button', class: 'secondary', onclick: async () => {
+      posNote.textContent = 'Getting your location…'; pos = await getPos();
+      posNote.textContent = pos ? 'Location saved. Only do this when you are at your farm.' : 'Could not get your location. You can skip this.';
+    } }, 'I am at my farm: use my location');
+    const cw = consentWidget({ self: true });
+    const out = h('div', { 'aria-live': 'polite' });
+    const submit = h('button', { type: 'submit', class: 'primary' }, 'Register me');
+    step(h('h3', {}, 'Step 3 of 3: about you and your farm'),
+      h('p', { class: 'help' }, `Phone verified: ${state.phone}`),
+      h('form', {
+        novalidate: true,
+        onsubmit: async (e) => {
+          e.preventDefault(); out.replaceChildren();
+          if (!name.value.trim() || !a.state.value.trim() || !a.lga.value.trim() || !crop.value.trim()) return out.append(note('Please fill in your name, state, local government area and main crop.'));
+          if (!cw.valid()) return out.append(note('Please read the information above and tick the first box to agree.'));
+          submit.disabled = true;
+          const inc = Object.fromEntries([['gender', gender.value], ['ageBand', age.value], ['disability', dis.value]].filter(([, v]) => v));
+          try {
+            const r = await api('/v1/public/registrations', { method: 'POST', body: {
+              phoneProof: state.proof, phone: state.phone, name: name.value.trim(), state: a.state.value.trim(), lga: a.lga.value.trim(),
+              community: community.value.trim() || undefined, crop: crop.value.trim(), reportedAreaHa: size.value ? Number(size.value) : undefined,
+              ...(Object.keys(inc).length ? { inclusion: inc } : {}),
+              ...(pos ? { location: { lat: pos.lat, lng: pos.lng, accuracyMeters: pos.accuracyMeters } } : {}),
+              consent: (({ given, wordingVersion, language, partnerSharing, mediaStorage }) => ({ given, wordingVersion, language, partnerSharing, mediaStorage }))(cw.value()),
+            } });
+            stepDone(r.reference);
+          } catch (err) {
+            out.replaceChildren(fail(err)); submit.disabled = false;
+            if (err.status === 403) out.append(h('div', { class: 'btns' }, h('button', { type: 'button', class: 'secondary', onclick: () => stepPhone() }, 'Verify my phone again')));
+          }
+        },
+      }, h('div', { class: 'grid' }, field('Your full name', name), field('State', a.state), field('Local government area', a.lga), ...a.lists, field('Village or community', community), field('Main crop', crop), field('Farm size (hectares)', size, 'Your best guess is fine.')),
+      h('h3', {}, 'Optional questions'),
+      h('p', { class: 'help' }, 'These help us report who is being reached. They are never shown to banks or partners. Skip any you prefer not to answer.'),
+      h('div', { class: 'grid' }, field('Gender', gender), field('Age group', age), field('Do you live with a disability?', dis)),
+      posNote, h('div', { class: 'btns' }, posBtn),
+      h('h3', {}, 'Your agreement'), cw.el, h('div', { class: 'btns' }, submit)), out);
+  }
+
+  // 4. done
+  function stepDone(reference) {
+    step(h('div', { class: 'newkey', role: 'status' }, h('h3', {}, 'Thank you. We have received your details.'),
+      h('p', {}, 'A FarmasLog team member will check them. Banks and programmes cannot see your record until it is approved, and you can ask us to remove it at any time.'),
+      h('p', {}, 'Your reference: ', h('code', {}, reference)),
+      h('p', { class: 'help' }, 'Keep this reference. Quote it if you message us on WhatsApp or call 0802 863 8349.')));
+  }
+  stepPhone();
+}
+farmerSignup();
+
 // ---- site menu: hamburger on small screens ----
 const menuBtn = $('#menu-btn'); const siteNav = $('#site-nav');
 const setMenu = (open) => { siteNav.classList.toggle('open', open); menuBtn.setAttribute('aria-expanded', String(open)); };

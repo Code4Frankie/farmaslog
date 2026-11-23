@@ -8,10 +8,12 @@ if (url && !/^(https:\/\/[^\s"'<>\\]+|http:\/\/localhost(:\d+)?)$/.test(url)) {
   console.error(`FARMASLOG_API_URL must be an https URL (or http://localhost:PORT). Got: ${url}`);
   process.exit(1);
 }
+const siteKey = (process.env.FARMASLOG_TURNSTILE_SITE_KEY || '').trim();
+if (siteKey && !/^[0-9A-Za-z_-]{10,80}$/.test(siteKey)) { console.error('FARMASLOG_TURNSTILE_SITE_KEY looks wrong.'); process.exit(1); }
 const dist = path.join(__dirname, 'dist');
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist);
 for (const f of ['index.html', 'styles.css', 'app.js', 'areas.json']) fs.copyFileSync(path.join(__dirname, f), path.join(dist, f));
 fs.cpSync(path.join(__dirname, 'brand'), path.join(dist, 'brand'), { recursive: true });
-fs.writeFileSync(path.join(dist, 'config.js'), `window.FARMASLOG_CONFIG = ${JSON.stringify({ apiUrl: url })};\n`);
+fs.writeFileSync(path.join(dist, 'config.js'), `window.FARMASLOG_CONFIG = ${JSON.stringify({ apiUrl: url, turnstileSiteKey: siteKey })};\n`);
 console.log(url ? `Built for API: ${url}` : 'Built in DEMO mode (FARMASLOG_API_URL is not set)');

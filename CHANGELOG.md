@@ -1,5 +1,14 @@
 # Changelog
 
+## Phase 5: Public farmer registration
+- `POST /v1/public/registrations`: a farmer registers themselves after verifying their phone by one-time code (`phoneProof`, purpose `register`). The record is created like an agent's: `pending_review`, source `self_registration`, channel `web_form`, consent method `self_checkbox`, no FarmasLog ID until a data manager approves, and never "verified" without a field visit. Review flow unchanged.
+- Consent must be in the current wording. `partnerSharing: false` is accepted and keeps the farmer hidden from partners.
+- Optional farm location is stored as a farmer pin; optional inclusion answers are staff-only.
+- BVN, NIN, date of birth and photos are refused with `400`.
+- Never reveals existence: the answer is always `202 { status: "received", reference }`. A possible duplicate waits in duplicate review. A phone can register at most 5 records a day (extras look accepted but are not stored). 8 submissions per hour per IP.
+- Web: the "Farmers: register" page is now the form (phone, code, details and optional questions, consent, thank-you with reference). Cloudflare Turnstile loads when `FARMASLOG_TURNSTILE_SITE_KEY` is set on Vercel. `web/vercel.json` CSP allows `https://challenges.cloudflare.com` for scripts and frames.
+- Tests: `tests/integration/public-registration.test.js`.
+
 ## Phase 4: One-time codes (OTP) and SMS
 - `POST /v1/public/otp/request` and `POST /v1/public/otp/verify` (no sign-in; purposes `register` and `access`). A correct code returns `phoneProof`, a signed 15-minute token that Phase 5 (self-registration) and Phase 8 (farmer view and correction) will require via `requirePhoneProof(proof, phone, purpose)`.
 - Never reveals anything about a number: `request` answers the same `202` for any valid Nigerian number, and the 30-second cooldown and 3-per-hour limit are applied silently. Every code failure is the same `400 INVALID_CODE`.

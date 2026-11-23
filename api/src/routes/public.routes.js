@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { validate } from '../middleware/validate.js';
-import { otpRequestLimiter, otpVerifyLimiter } from '../middleware/rateLimit.js';
-import { otpRequestSchema, otpVerifySchema } from '../validators/index.js';
+import { otpRequestLimiter, otpVerifyLimiter, registrationLimiter } from '../middleware/rateLimit.js';
+import { otpRequestSchema, otpVerifySchema, publicRegistrationSchema } from '../validators/index.js';
 import { auditCtx } from '../services/audit.service.js';
 import { verifyCaptcha } from '../services/captcha.service.js';
 import { requestOtp, verifyOtp } from '../services/otp.service.js';
+import { submitSelfRegistration } from '../services/selfRegistration.service.js';
 
 // Public endpoints used by farmers (no sign-in). They are rate limited and never reveal whether a phone number is on FarmasLog.
 const router = Router();
@@ -22,6 +23,11 @@ router.post('/otp/request', otpRequestLimiter, validate(otpRequestSchema), async
 router.post('/otp/verify', otpVerifyLimiter, validate(otpVerifySchema), asyncHandler(async (req, res) => {
   const { proof, expiresInSeconds } = await verifyOtp(req.body, auditCtx(req));
   res.json({ phoneProof: proof, expiresInSeconds });
+}));
+
+// A farmer registers themselves. Needs the phoneProof from /otp/verify. Same answer whether or not the farmer is already on record.
+router.post('/registrations', registrationLimiter, validate(publicRegistrationSchema), asyncHandler(async (req, res) => {
+  res.status(202).json(await submitSelfRegistration(req.body, auditCtx(req)));
 }));
 
 export default router;

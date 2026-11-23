@@ -68,6 +68,19 @@ export const openapi = {
         responses: { 200: { description: '`{ phoneProof, expiresInSeconds }`' }, 400: err('INVALID_CODE'), 429: err('Too many requests from this address') },
       },
     },
+    '/v1/public/registrations': {
+      post: {
+        tags: ['Public (farmers)'], summary: 'A farmer registers themselves (needs a phoneProof; rate limited)',
+        description: 'Needs the `phoneProof` from `/v1/public/otp/verify` for the same number. Creates the record exactly like an agent registration: `pending_review`, source `self_registration`, no FarmasLog ID until a data manager approves, and never "verified" without a field visit. Consent must be given in the current wording; `partnerSharing: false` is allowed and keeps the farmer hidden from partners. A farm location, if sent, is stored as a farmer pin. BVN, NIN, date of birth and photos are refused (`400`). The answer is the same `202` whether or not the farmer is already on record: a possible duplicate waits in duplicate review and the caller is not told. A phone can register at most 5 records a day (extras are accepted but not stored); 8 submissions per hour per IP.',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['phoneProof', 'name', 'phone', 'state', 'lga', 'crop', 'consent'], properties: {
+          phoneProof: { type: 'string' }, name: { type: 'string' }, phone: { type: 'string' }, state: { type: 'string' }, lga: { type: 'string' }, ward: { type: 'string' }, community: { type: 'string' },
+          crop: { type: 'string' }, reportedAreaHa: { type: 'number' }, inclusion: { $ref: '#/components/schemas/Inclusion' },
+          location: { type: 'object', properties: { lat: { type: 'number' }, lng: { type: 'number' }, accuracyMeters: { type: 'number' } } },
+          consent: { type: 'object', required: ['given', 'wordingVersion', 'partnerSharing'], properties: { given: { type: 'boolean', enum: [true] }, wordingVersion: { type: 'string', example: 'consent-v1-draft' }, language: { type: 'string' }, partnerSharing: { type: 'boolean' }, mediaStorage: { type: 'boolean' } } },
+        } } } } },
+        responses: { 202: { description: '`{ status: "received", reference }`' }, 400: err('Validation failed, or a field that is not collected was sent'), 403: err('PHONE_NOT_VERIFIED'), 429: err('Too many requests from this address') },
+      },
+    },
     '/v1/reference/consent': {
       get: {
         tags: ['Reference'], summary: 'Farmer consent text (public)',

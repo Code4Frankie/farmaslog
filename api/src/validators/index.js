@@ -91,6 +91,34 @@ export const otpVerifySchema = Joi.object({
   code: Joi.string().trim().pattern(/^\d{6}$/).required().messages({ 'string.pattern.base': 'The code is 6 digits.' }),
 });
 
+// Public self-registration. Only what a farmer can reasonably give. BVN, NIN, date of birth and photos are refused outright.
+const notCollected = (name) => Joi.any().forbidden().messages({ 'any.unknown': `${name} is not collected` });
+export const publicRegistrationSchema = Joi.object({
+  phoneProof: Joi.string().max(2000).required(),
+  name: Joi.string().trim().min(2).max(120).required(),
+  phone: Joi.string().trim().max(25).required(),
+  state: Joi.string().trim().max(60).required(),
+  lga: Joi.string().trim().max(60).required(),
+  ward: Joi.string().trim().max(80).allow(''),
+  community: Joi.string().trim().max(80).allow(''),
+  crop: Joi.string().trim().max(80).required(),
+  reportedAreaHa: Joi.number().positive().max(100000),
+  inclusion: inclusionSchema,
+  // Where the farm is, if the farmer chooses to share it (their phone's location). Always recorded as a farmer pin.
+  location: Joi.object({
+    lat: location.extract('lat'), lng: location.extract('lng'), accuracyMeters: Joi.number().min(0).max(100000),
+  }),
+  consent: Joi.object({
+    given: Joi.boolean().valid(true).required(),
+    wordingVersion: Joi.string().valid(CURRENT_CONSENT_VERSION).required(),
+    language: Joi.string().valid(...LANGUAGES).default('en'),
+    partnerSharing: Joi.boolean().required(),
+    mediaStorage: Joi.boolean().default(false),
+  }).required(),
+  bvn: notCollected('BVN'), nin: notCollected('NIN'), dob: notCollected('Date of birth'), dateOfBirth: notCollected('Date of birth'),
+  photo: notCollected('Photos'), photos: notCollected('Photos'),
+});
+
 export const inclusionStatsSchema = Joi.object({
   state: Joi.string().trim().max(60), lga: Joi.string().trim().max(60),
   groupBy: Joi.string().valid('state', 'lga'),

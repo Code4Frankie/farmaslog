@@ -40,6 +40,7 @@ body.in-app .site-nav { display: none !important; }
 .menu-btn[aria-expanded="true"] .menu-bars::before { transform: translateY(7px) rotate(45deg); }
 .menu-btn[aria-expanded="true"] .menu-bars::after { transform: translateY(-7px) rotate(-45deg); }
 body.in-app .menu-btn { display: none; }
+.captcha { margin: .75rem 0; min-height: 4px; }
 .farmer-steps { padding-left: 1.2rem; line-height: 1.55; }
 .farmer-steps li { margin-bottom: .6rem; }
 @media (max-width: 900px) {
