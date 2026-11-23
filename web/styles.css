@@ -19,8 +19,9 @@ a { color: var(--paddy); text-underline-offset: 3px; }
 [tabindex="-1"]:focus-visible { outline: none; }
 .demo { background: var(--sun); color: var(--ink); padding: .5rem 1rem; text-align: center; font-weight: 600; }
 
-/* header */
-.site-header { background: var(--paper); border-bottom: 4px solid var(--sun); padding: .65rem 1.5rem; min-height: 4.25rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+/* header: stays at the top so the menu is always there after a click; targets scroll clear of it */
+.shell, .how { scroll-margin-top: 4.5rem; }
+.site-header { position: sticky; top: 0; z-index: 30; background: var(--paper); border-bottom: 4px solid var(--sun); padding: .65rem 1.5rem; min-height: 4.25rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .logo-link { display: inline-flex; border-radius: 6px; }
 .logo-link img { display: block; height: 3rem; width: auto; }
 .site-nav { display: flex; gap: 1.25rem; flex-wrap: wrap; justify-content: flex-end; }

@@ -489,7 +489,7 @@ SCREENS.password = (el) => {
 
 // ---- shell: sign in / sign up / signed-in app ----
 let current = 'signin';
-const ROUTES = { '#/signin': 'signin', '#/signup': 'signup', '#/agent': 'agent', '#/farmers': 'farmers' };
+const ROUTES = { '#/signin': 'signin', '#/signup': 'signup', '#/agent': 'agent', '#/farmers': 'farmers', '#/government': 'signup' };
 function show(name) {
   current = name;
   for (const e of document.querySelectorAll('[data-view]')) e.hidden = e.dataset.view !== name;
@@ -500,6 +500,7 @@ function show(name) {
 function route(scroll = false) {
   const next = user ? 'app' : ROUTES[location.hash] || (location.hash ? current : 'signin');
   show(next);
+  if (location.hash === '#/government' && next === 'signup') $('#su-type').value = 'government'; // the Government menu item preselects the type
   if (scroll && next !== 'app') $('.shell').scrollIntoView({ block: 'start' });
 }
 
@@ -561,7 +562,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && siteNav.
 document.addEventListener('click', (e) => { if (siteNav.classList.contains('open') && !e.target.closest('.site-header')) setMenu(false); });
 const markNav = () => {
   for (const a of siteNav.querySelectorAll('a')) {
-    const here = a.dataset.route === location.hash && a.dataset.route !== '#/signup-gov';
+    const here = a.dataset.route === location.hash;
     if (here) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   }
 };
