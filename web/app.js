@@ -489,7 +489,7 @@ SCREENS.password = (el) => {
 
 // ---- shell: sign in / sign up / signed-in app ----
 let current = 'signin';
-const ROUTES = { '#/signin': 'signin', '#/signup': 'signup', '#/agent': 'agent' };
+const ROUTES = { '#/signin': 'signin', '#/signup': 'signup', '#/agent': 'agent', '#/farmers': 'farmers' };
 function show(name) {
   current = name;
   for (const e of document.querySelectorAll('[data-view]')) e.hidden = e.dataset.view !== name;
@@ -552,12 +552,25 @@ bind($('#form-agent'), async (f) => {
   $('#form-agent').hidden = true; $('#agent-done').hidden = false;
 });
 $('#signout').addEventListener('click', signOut);
-window.addEventListener('hashchange', () => route(true));
+// ---- site menu: hamburger on small screens ----
+const menuBtn = $('#menu-btn'); const siteNav = $('#site-nav');
+const setMenu = (open) => { siteNav.classList.toggle('open', open); menuBtn.setAttribute('aria-expanded', String(open)); };
+menuBtn.addEventListener('click', () => setMenu(menuBtn.getAttribute('aria-expanded') !== 'true'));
+siteNav.addEventListener('click', (e) => { if (e.target.closest('a')) setMenu(false); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && siteNav.classList.contains('open')) { setMenu(false); menuBtn.focus(); } });
+document.addEventListener('click', (e) => { if (siteNav.classList.contains('open') && !e.target.closest('.site-header')) setMenu(false); });
+const markNav = () => {
+  for (const a of siteNav.querySelectorAll('a')) {
+    const here = a.dataset.route === location.hash && a.dataset.route !== '#/signup-gov';
+    if (here) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  }
+};
+window.addEventListener('hashchange', () => { route(true); markNav(); });
 
 (async function init() {
   if (DEMO) { $('#demo-banner').hidden = false; $('#demo-hint').hidden = false; }
   if (session.token) {
     try { await enter((await api('/v1/auth/me', { token: session.token })).user); return; } catch { session.save(null); }
   }
-  route();
+  route(); markNav();
 })();
