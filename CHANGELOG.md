@@ -1,5 +1,13 @@
 # Changelog
 
+## Phase 4: One-time codes (OTP) and SMS
+- `POST /v1/public/otp/request` and `POST /v1/public/otp/verify` (no sign-in; purposes `register` and `access`). A correct code returns `phoneProof`, a signed 15-minute token that Phase 5 (self-registration) and Phase 8 (farmer view and correction) will require via `requirePhoneProof(proof, phone, purpose)`.
+- Never reveals anything about a number: `request` answers the same `202` for any valid Nigerian number, and the 30-second cooldown and 3-per-hour limit are applied silently. Every code failure is the same `400 INVALID_CODE`.
+- Codes: 6 digits, 10 minutes, one use, 5 tries, a new code replaces the old one. Phone and code are stored only as keyed hashes (`otps` collection, TTL-cleaned). Per-IP rate limits on both endpoints. Audit: `otp.requested`, `otp.request_limited`, `otp.verified`, `otp.locked` with purpose and a short hash reference, never the number or code.
+- SMS service (`sms.service.js`): Termii provider (`TERMII_API_KEY`, `TERMII_SENDER_ID`, `TERMII_CHANNEL`), in-memory outbox for tests and local development, fails with `503 SMS_UNAVAILABLE` in production when unconfigured. If the provider fails nothing is recorded, so the person can retry at once. Nothing about the message is logged.
+- Captcha (`captcha.service.js`): Cloudflare Turnstile, required in production, fails closed without `TURNSTILE_SECRET`.
+- Tests: `tests/unit/sms.test.js`, `tests/integration/otp.test.js`. Setup steps in `docs/OPERATIONS.md`.
+
 ## Consent details editable, with FarmasLog contact defaults
 - The consent text's contact details now default to the published ones (phone 0802 863 8349, WhatsApp 0706 758 4686, email info@frankiecode.org.ng). Address, retention period and hosting still show as [bracketed] gaps until set.
 - `GET /v1/admin/consent-details` (super admin, data manager, auditor) and `PUT /v1/admin/consent-details` (super admin only, audited). Saved values beat `CONSENT_*` env vars, which beat the defaults. An empty string removes a saved value. Stored in a new `settings` collection, loaded at startup.

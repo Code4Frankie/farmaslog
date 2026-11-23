@@ -20,6 +20,9 @@ const base = { standardHeaders: 'draft-7', legacyHeaders: false, handler: limite
 export const globalLimiter = rateLimit({ ...base, windowMs: 60_000, limit: env.isTest ? 100000 : 600 });
 // Brute-force protection on login.
 export const loginLimiter = rateLimit({ ...base, windowMs: 15 * 60_000, limit: env.isTest ? 100000 : 10 });
+// Public one-time-code endpoints: per IP, on top of the per-phone limits in otp.service.js.
+export const otpRequestLimiter = rateLimit({ ...base, windowMs: 15 * 60_000, limit: env.isTest ? 100000 : 10 });
+export const otpVerifyLimiter = rateLimit({ ...base, windowMs: 15 * 60_000, limit: env.isTest ? 100000 : 30 });
 // Per API key, using the plan default unless the key has an override (PRD section 9).
 export const keyLimiter = rateLimit({
   ...base,

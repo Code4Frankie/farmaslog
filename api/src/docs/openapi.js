@@ -12,7 +12,7 @@ export const openapi = {
       'A satellite signal is never proof of a farm or of ownership.',
   },
   servers: [{ url: '/' }],
-  tags: [{ name: 'Verification' }, { name: 'Auth' }, { name: 'Farmers' }, { name: 'Partners & keys' }, { name: 'Reporting' }, { name: 'Webhooks' }],
+  tags: [{ name: 'Verification' }, { name: 'Auth' }, { name: 'Farmers' }, { name: 'Partners & keys' }, { name: 'Reporting' }, { name: 'Webhooks' }, { name: 'Public (farmers)' }],
   paths: {
     '/v1/verify': {
       get: {
@@ -50,6 +50,22 @@ export const openapi = {
         description: 'Without parameters returns every state with its LGAs. With `state` returns that state only. Any area may still be entered by hand.',
         parameters: [{ name: 'state', in: 'query', schema: { type: 'string' }, example: 'Nasarawa' }],
         responses: { 200: { description: 'States / LGAs' }, 404: err('Unknown state') },
+      },
+    },
+    '/v1/public/otp/request': {
+      post: {
+        tags: ['Public (farmers)'], summary: 'Send a one-time code by SMS (no sign-in, rate limited)',
+        description: 'Sends a 6-digit code to a Nigerian mobile number. For any valid number the answer is the same `202`, whether or not the number is on FarmasLog, and the cooldown (30 s) and hourly limit (3 sends) are applied silently, so the response never reveals anything about the number. Needs a Cloudflare Turnstile `captchaToken` when captcha is required (production). Never cached.',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['phone', 'purpose'], properties: { phone: { type: 'string' }, purpose: { type: 'string', enum: ['register', 'access'] }, captchaToken: { type: 'string' } } } } } },
+        responses: { 202: { description: '`{ status: "sent_if_valid", resendAfterSeconds }`' }, 400: err('Invalid phone, or the security check failed'), 429: err('Too many requests from this address'), 503: err('SMS or security check unavailable (nothing was recorded; retry)') },
+      },
+    },
+    '/v1/public/otp/verify': {
+      post: {
+        tags: ['Public (farmers)'], summary: 'Check a one-time code and get a phone proof',
+        description: 'A correct code is burned and returns `phoneProof`, a signed token (15 minutes) showing that the caller controls this number for this purpose. Every failure (wrong, expired, already used, never sent, too many tries) returns the same `400 INVALID_CODE`. After 5 wrong tries the code is dead; request a new one.',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['phone', 'purpose', 'code'], properties: { phone: { type: 'string' }, purpose: { type: 'string', enum: ['register', 'access'] }, code: { type: 'string', example: '123456' } } } } } },
+        responses: { 200: { description: '`{ phoneProof, expiresInSeconds }`' }, 400: err('INVALID_CODE'), 429: err('Too many requests from this address') },
       },
     },
     '/v1/reference/consent': {

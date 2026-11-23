@@ -80,6 +80,17 @@ export const consentDetailsSchema = Joi.object({
   hosting: Joi.string().trim().max(200).allow(''),
 }).min(1);
 
+export const otpRequestSchema = Joi.object({
+  phone: Joi.string().trim().max(25).required(),
+  purpose: Joi.string().valid('register', 'access').required(),
+  captchaToken: Joi.string().max(4096).allow(''),
+});
+export const otpVerifySchema = Joi.object({
+  phone: Joi.string().trim().max(25).required(),
+  purpose: Joi.string().valid('register', 'access').required(),
+  code: Joi.string().trim().pattern(/^\d{6}$/).required().messages({ 'string.pattern.base': 'The code is 6 digits.' }),
+});
+
 export const inclusionStatsSchema = Joi.object({
   state: Joi.string().trim().max(60), lga: Joi.string().trim().max(60),
   groupBy: Joi.string().valid('state', 'lga'),

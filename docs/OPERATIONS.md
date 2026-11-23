@@ -24,3 +24,22 @@ Check: `GET /v1/reference/consent` returns `"incomplete": false`.
 **Withdrawal.** Farmers list > Withdraw consent (or `POST /v1/farmers/:id/consent-withdrawal`). The record is hidden from partner verification at once and cannot be approved, enriched or field-verified. Fresh consent (Record consent) reverses it.
 
 **Erasure (manual, super admin).** Withdrawal does not delete data. When a farmer asks for deletion: confirm identity through the record's phone, withdraw consent, then delete the `Farmer`, its `Farm` and the uploaded files (`UPLOAD_DIR/<farmerId>`) in Atlas, and write down the date and who did it. Audit entries are kept; they hold IDs and field names, not personal details.
+
+
+## One-time codes (SMS) and captcha
+Farmers prove they control a phone number with a 6-digit code sent by text message. Nothing in the API works until these are set on Render.
+
+**Termii (SMS)**
+1. Create a Termii account, add credit, and copy the API key into `TERMII_API_KEY`.
+2. Register the sender ID `FarmasLog` in the Termii dashboard (Sender ID section). Approval can take a few days. Until it is approved, messages may not arrive. `TERMII_SENDER_ID` must match the approved name exactly.
+3. Leave `TERMII_CHANNEL=dnd`. The `generic` channel is cheaper but is blocked for numbers on Nigeria's Do-Not-Disturb list.
+4. Without `TERMII_API_KEY` the API answers `503 SMS_UNAVAILABLE` in production. Nothing is recorded and no code is sent.
+
+**Cloudflare Turnstile (captcha)**
+1. In Cloudflare, Turnstile, add a widget for `farmaslog.vercel.app` (and your own domain later). Copy the secret key into `TURNSTILE_SECRET` on Render. The site key goes into the web page in Phase 5.
+2. In production captcha is required. If `TURNSTILE_SECRET` is missing the API fails closed (`503 CAPTCHA_UNAVAILABLE`) rather than letting bots through. `CAPTCHA_REQUIRED=false` is for staging only.
+3. Phase 5 will also loosen `web/vercel.json` Content-Security-Policy to allow `https://challenges.cloudflare.com`.
+
+**Limits**: 10 code requests and 30 checks per IP per 15 minutes; per phone, one code every 30 seconds and 3 per hour; 5 wrong tries kill a code; a code lasts 10 minutes. Change with the `OTP_*` variables.
+
+**Privacy**: the phone number and code are never logged or stored in the clear (only keyed hashes). Audit entries hold the purpose and a short hash reference. The API answers the same for numbers that are on FarmasLog and numbers that are not.

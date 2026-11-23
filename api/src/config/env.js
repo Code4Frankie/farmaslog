@@ -43,6 +43,27 @@ export const env = {
     // When true, records flagged needs_reconsent are hidden from partner verification. Withdrawn records are ALWAYS hidden.
     hideNeedsReconsent: bool(process.env.HIDE_NEEDS_RECONSENT, false),
   },
+  // SMS (one-time codes). Provider 'termii' needs TERMII_API_KEY. In tests/dev with no key, codes go to an in-memory outbox instead.
+  sms: {
+    provider: (process.env.SMS_PROVIDER || (process.env.TERMII_API_KEY ? 'termii' : (isProd ? 'none' : 'memory'))).toLowerCase(),
+    termiiApiKey: process.env.TERMII_API_KEY || '',
+    termiiBaseUrl: (process.env.TERMII_BASE_URL || 'https://api.ng.termii.com').replace(/\/+$/, ''),
+    senderId: process.env.TERMII_SENDER_ID || 'FarmasLog',
+    channel: process.env.TERMII_CHANNEL || 'dnd', // 'dnd' reaches numbers on Do-Not-Disturb; 'generic' is cheaper but is blocked there
+  },
+  // Cloudflare Turnstile. Required in production unless CAPTCHA_REQUIRED=false. If required and no secret is set, requests fail closed.
+  captcha: {
+    required: bool(process.env.CAPTCHA_REQUIRED, isProd),
+    turnstileSecret: process.env.TURNSTILE_SECRET || '',
+    verifyUrl: process.env.TURNSTILE_VERIFY_URL || 'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+  },
+  otp: {
+    ttlMinutes: Number(process.env.OTP_TTL_MINUTES || 10),
+    maxAttempts: Number(process.env.OTP_MAX_ATTEMPTS || 5),
+    maxSendsPerHour: Number(process.env.OTP_MAX_SENDS_PER_HOUR || 3),
+    resendSeconds: Number(process.env.OTP_RESEND_SECONDS || 30),
+    proofMinutes: Number(process.env.OTP_PROOF_MINUTES || 15),
+  },
   ndviThreshold: Number(process.env.NDVI_THRESHOLD || 0.3),
   areaTolerance: Number(process.env.AREA_DISCREPANCY_TOLERANCE || 0.3),
 };
