@@ -91,7 +91,7 @@ export async function registerFarmer(input, ctx) {
 
   const farmer = await Farmer.create({
     farmaslogId: isDuplicate ? undefined : await allocateFarmaslogId(),
-    name: input.name, phoneNormalized: phone, contactVia,
+    name: input.name, phoneNormalized: phone, contactVia, inclusion: input.inclusion,
     state: area.state, lga: area.lga, ward: input.ward || undefined, community: input.community || undefined,
     ...buildConsentRecord({ ...input.consent, capturedAt: input.submittedAt }, ctx),
     source: input.source || 'field_agent',
@@ -126,7 +126,7 @@ export async function registerFarmer(input, ctx) {
     sharedPhone = await flagSharedPhone(farmer, ctx);
     if (sharedPhone) { farmer.sharedPhone = true; await farmer.save(); }
   }
-  await writeAudit(ctx, { action: 'farmer.registered', entityType: 'Farmer', entityId: farmer._id, changes: { status: farmer.status, source: farmer.source, duplicateCandidate: isDuplicate, sharedPhone, hasPhone: !!phone, contactType: contactVia?.type ?? null } });
+  await writeAudit(ctx, { action: 'farmer.registered', entityType: 'Farmer', entityId: farmer._id, changes: { status: farmer.status, source: farmer.source, duplicateCandidate: isDuplicate, sharedPhone, hasPhone: !!phone, contactType: contactVia?.type ?? null, inclusionRecorded: !!input.inclusion } });
   return { farmer, farm, isDuplicate, alreadyImported: false, warnings: area.warnings };
 }
 
@@ -150,6 +150,13 @@ export async function updateFarmer(farmer, input, ctx) {
   if (input.contactVia !== undefined) {
     farmer.contactVia = input.contactVia ? buildContact(input.contactVia) : undefined;
     changes.contactVia = { changed: true };
+  }
+  if (input.inclusion) {
+    // Merge: only the fields sent change. Values are non-identifying categories, so they are safe to audit.
+    for (const k of Object.keys(input.inclusion)) {
+      const from = farmer.inclusion?.[k];
+      if (from !== input.inclusion[k]) { changes[`inclusion.${k}`] = { from: from ?? null, to: input.inclusion[k] }; farmer.set(`inclusion.${k}`, input.inclusion[k]); }
+    }
   }
   if (input.phone !== undefined) {
     const p = input.phone ? normalizeNigerianPhone(input.phone) : undefined;

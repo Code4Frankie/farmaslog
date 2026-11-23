@@ -96,7 +96,7 @@ export const openapi = {
     '/v1/farmers/{id}': {
       parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
       get: { tags: ['Farmers'], summary: 'Get one farmer', security: bearerJwt, responses: { 200: { description: 'Farmer and farm' }, 404: err('Not found') } },
-      patch: { tags: ['Farmers'], summary: 'Update (audited; data manager / super admin)', security: bearerJwt, description: 'Send `phone: null` to remove the phone (a `contactVia` must remain). `sharedPhone` can be corrected by hand here.', requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { name: { type: 'string' }, phone: { type: 'string', nullable: true }, contactVia: { $ref: '#/components/schemas/ContactVia' }, sharedPhone: { type: 'boolean' }, state: { type: 'string' }, lga: { type: 'string' }, ward: { type: 'string' }, community: { type: 'string' } } } } } }, responses: { 200: { description: 'Updated' }, 400: err('Invalid phone, or a farmer would be left with no phone and no contact person') } },
+      patch: { tags: ['Farmers'], summary: 'Update (audited; data manager / super admin)', security: bearerJwt, description: 'Send `phone: null` to remove the phone (a `contactVia` must remain). `sharedPhone` can be corrected by hand here.', requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { name: { type: 'string' }, phone: { type: 'string', nullable: true }, contactVia: { $ref: '#/components/schemas/ContactVia' }, sharedPhone: { type: 'boolean' }, inclusion: { $ref: '#/components/schemas/Inclusion' }, state: { type: 'string' }, lga: { type: 'string' }, ward: { type: 'string' }, community: { type: 'string' } } } } } }, responses: { 200: { description: 'Updated' }, 400: err('Invalid phone, or a farmer would be left with no phone and no contact person') } },
     },
     '/v1/farmers/{id}/review': {
       post: {
@@ -167,6 +167,26 @@ export const openapi = {
     },
     '/v1/api-keys/{keyId}/revoke': { post: { tags: ['Partners & keys'], summary: 'Revoke key', security: bearerJwt, parameters: [{ name: 'keyId', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Revoked' } } } },
     '/v1/api-keys/{keyId}/rotate': { post: { tags: ['Partners & keys'], summary: 'Rotate key with optional grace period', security: bearerJwt, parameters: [{ name: 'keyId', in: 'path', required: true, schema: { type: 'string' } }], responses: { 201: { description: 'New key issued once' } } } },
+    '/v1/admin/inclusion-stats': {
+      get: {
+        tags: ['Reporting'], summary: 'Inclusion statistics (super admin, data manager, auditor)', security: bearerJwt,
+        description: 'Counts of farmers by gender, age band and disability for funder reporting. Aggregate numbers only. Rejected and withdrawn records are not counted, and unanswered fields appear as `not_recorded`. Groups of 1 to 4 are hidden (`count: null, suppressed: true`); if only one group in a breakdown is hidden, the smallest visible group is hidden too so it cannot be worked out by subtraction. Never available to partners.',
+        parameters: [
+          { name: 'state', in: 'query', schema: { type: 'string' } }, { name: 'lga', in: 'query', schema: { type: 'string' } },
+          { name: 'groupBy', in: 'query', schema: { type: 'string', enum: ['state', 'lga'] }, description: 'Adds `areas`: total and gender counts per state or LGA (areas under 5 farmers fully hidden).' },
+        ],
+        responses: { 200: { description: 'Counts' }, 403: err('Not allowed for this role') },
+      },
+    },
+    '/v1/admin/consent-details': {
+      get: { tags: ['Reporting'], summary: 'Consent contact details (super admin, data manager, auditor)', security: bearerJwt, description: 'The six details printed in the consent text, each with its `source` (`saved` | `default` | `missing`).', responses: { 200: { description: 'Details, plus `incomplete` and `missingPlaceholders`' }, 403: err('Not allowed for this role') } },
+      put: {
+        tags: ['Reporting'], summary: 'Edit consent contact details (super admin only, audited)', security: bearerJwt,
+        description: 'Send only the keys to change. An empty string removes the saved value (falls back to the environment variable or default). New consents use the new text; consents already recorded keep the hash of the text the farmer saw.',
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { registeredAddress: { type: 'string' }, email: { type: 'string' }, phone: { type: 'string' }, whatsapp: { type: 'string' }, retention: { type: 'string' }, hosting: { type: 'string' } } } } } },
+        responses: { 200: { description: 'Updated details and the keys that changed' }, 400: err('Invalid value'), 403: err('Only a super admin can edit') },
+      },
+    },
     '/v1/usage': { get: { tags: ['Reporting'], summary: 'Usage by partner, plan and period', security: bearerJwt, responses: { 200: { description: 'OK' } } } },
     '/v1/verification-logs': { get: { tags: ['Reporting'], summary: 'Verification request log', security: bearerJwt, responses: { 200: { description: 'OK' } } } },
     '/v1/audit-logs': { get: { tags: ['Reporting'], summary: 'Audit trail (admin, auditor)', security: bearerJwt, responses: { 200: { description: 'OK' } } } },
@@ -235,12 +255,20 @@ export const openapi = {
         description: 'A person who can reach the farmer. Their number is never used to look the farmer up. `phone` is required unless `type` is `agent`.',
         properties: { type: { type: 'string', enum: ['farmer', 'relative', 'cooperative_leader', 'agent'] }, name: { type: 'string' }, phone: { type: 'string' }, relationship: { type: 'string' } },
       },
+      Inclusion: {
+        type: 'object', description: 'Optional and voluntary. Age is a band, never a date of birth. Staff-only: never returned by /v1/verify.',
+        properties: {
+          gender: { type: 'string', enum: ['female', 'male', 'other', 'prefer_not_to_say'] },
+          ageBand: { type: 'string', enum: ['18_24', '25_34', '35_44', '45_54', '55_64', '65_plus', 'prefer_not_to_say'] },
+          disability: { type: 'string', enum: ['none', 'yes', 'prefer_not_to_say'] },
+        },
+      },
       RegisterFarmer: {
         type: 'object',
         required: ['name', 'state', 'lga', 'consent', 'farm'],
         description: 'Provide `phone` and/or `contactVia`: at least one is required.',
         properties: {
-          name: { type: 'string' }, phone: { type: 'string' }, contactVia: { $ref: '#/components/schemas/ContactVia' }, state: { type: 'string' }, lga: { type: 'string' },
+          name: { type: 'string' }, phone: { type: 'string' }, contactVia: { $ref: '#/components/schemas/ContactVia' }, inclusion: { $ref: '#/components/schemas/Inclusion' }, state: { type: 'string' }, lga: { type: 'string' },
           ward: { type: 'string' }, community: { type: 'string' },
           consent: { $ref: '#/components/schemas/ConsentInput' },
           farm: { type: 'object', required: ['crop'], properties: { crop: { type: 'string' }, reportedAreaHa: { type: 'number' }, location: { type: 'object', properties: { lat: { type: 'number' }, lng: { type: 'number' }, source: { type: 'string' }, accuracyMeters: { type: 'number' } } } } },

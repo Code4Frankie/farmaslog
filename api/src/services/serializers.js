@@ -8,6 +8,7 @@ export function farmerView(farmer, farm) {
     name: f.name,
     phone: f.phoneNormalized ?? null,
     sharedPhone: !!f.sharedPhone,
+    inclusion: { gender: f.inclusion?.gender ?? null, ageBand: f.inclusion?.ageBand ?? null, disability: f.inclusion?.disability ?? null },
     contactVia: f.contactVia?.type ? { type: f.contactVia.type, name: f.contactVia.name ?? null, phone: f.contactVia.phoneNormalized ?? null, relationship: f.contactVia.relationship ?? null } : null,
     state: f.state, lga: f.lga, ward: f.ward, community: f.community,
     status: f.status,

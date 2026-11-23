@@ -5,11 +5,11 @@ const DEMO_LOGIN = { email: 'demo@farmaslog.test', password: 'demo-password-123'
 const DEMO_USER = { name: 'Demo Lender', role: 'partner_verifier', organization: 'Demo Agri Bank' };
 const ROLES = { super_admin: 'Administrator', data_manager: 'Data manager', field_agent: 'Field agent', partner_verifier: 'Partner', finance: 'Finance', auditor: 'Auditor' };
 const TABS = {
-  partner_verifier: ['console', 'keys', 'usage', 'password'], super_admin: ['approvals', 'farmers', 'register', 'team', 'keys', 'usage', 'password'],
-  data_manager: ['farmers', 'register', 'password'], field_agent: ['register', 'farmers', 'password'], finance: ['usage', 'password'], auditor: ['usage', 'farmers', 'password'],
+  partner_verifier: ['console', 'keys', 'usage', 'password'], super_admin: ['approvals', 'farmers', 'register', 'team', 'consentinfo', 'keys', 'usage', 'password'],
+  data_manager: ['farmers', 'register', 'consentinfo', 'password'], field_agent: ['register', 'farmers', 'password'], finance: ['usage', 'password'], auditor: ['usage', 'farmers', 'password'],
 };
-const TITLES = { console: 'Verify a farmer', keys: 'API keys', usage: 'Usage', approvals: 'Access requests', farmers: 'Farmers', register: 'Register a farmer', team: 'FarmasLog team', password: 'Change your password' };
-const TAB = { console: 'Verify', keys: 'API keys', usage: 'Usage', approvals: 'Requests', farmers: 'Farmers', register: 'Register', team: 'Team', password: 'Password' };
+const TITLES = { console: 'Verify a farmer', keys: 'API keys', usage: 'Usage', approvals: 'Access requests', farmers: 'Farmers', register: 'Register a farmer', team: 'FarmasLog team', consentinfo: 'Consent details', password: 'Change your password' };
+const TAB = { console: 'Verify', keys: 'API keys', usage: 'Usage', approvals: 'Requests', farmers: 'Farmers', register: 'Register', team: 'Team', consentinfo: 'Consent info', password: 'Password' };
 const ORG_TYPES = { bank: 'Bank or lender', government: 'Government agency', ngo: 'NGO or grant funder', programme: 'Agricultural programme', insurer: 'Insurer', cooperative: 'Cooperative', extension: 'Extension service', other: 'Other' };
 const ONBOARD = [['field_agent', 'Field agent'], ['data_manager', 'Data manager'], ['finance', 'Finance'], ['auditor', 'Auditor']];
 
@@ -328,6 +328,10 @@ SCREENS.register = (el) => {
   const cname = i('cname'); const cphone = i('cphone', { type: 'tel', placeholder: '08012345678' }); const crel = i('crel', { placeholder: 'For example: son, aunt, chairman' });
   const cbox = h('div', { class: 'grid', hidden: true }, field('Contact name', cname), field('Contact phone', cphone, 'Needed unless you are the contact.'), field('Relationship to the farmer', crel));
   ctype.addEventListener('change', () => { cbox.hidden = !ctype.value; });
+  const sel = (id, opts) => h('select', { id }, [['', 'Not asked'], ...opts].map(([v, t]) => h('option', { value: v }, t)));
+  const gender = sel('r-gender', [['female', 'Female'], ['male', 'Male'], ['other', 'Other'], ['prefer_not_to_say', 'Prefers not to say']]);
+  const ageBand = sel('r-age', [['18_24', '18 to 24'], ['25_34', '25 to 34'], ['35_44', '35 to 44'], ['45_54', '45 to 54'], ['55_64', '55 to 64'], ['65_plus', '65 or older'], ['prefer_not_to_say', 'Prefers not to say']]);
+  const disability = sel('r-dis', [['none', 'No'], ['yes', 'Yes'], ['prefer_not_to_say', 'Prefers not to say']]);
   const community = i('community'); const crop = i('crop', { required: true }); const area = i('area', { type: 'number', step: '0.01', min: '0.01' });
   const lat = i('lat', { type: 'number', step: 'any' }); const lng = i('lng', { type: 'number', step: 'any' }); const acc = i('acc', { type: 'number', min: '0' });
   const src = h('select', { id: 'r-src' }, [['farmer_reported', 'Typed in (not confirmed)'], ['gps_field_agent', 'GPS taken at the farm'], ['town_centre', 'Town or village centre']].map(([v, t]) => h('option', { value: v }, t)));
@@ -348,6 +352,7 @@ SCREENS.register = (el) => {
       const body = {
         name: name.value.trim(), ...(phone.value.trim() ? { phone: phone.value.trim() } : {}),
         ...(ctype.value ? { contactVia: { type: ctype.value, name: cname.value.trim(), phone: cphone.value.trim(), relationship: crel.value.trim() } } : {}),
+        ...(gender.value || ageBand.value || disability.value ? { inclusion: Object.fromEntries([['gender', gender.value], ['ageBand', ageBand.value], ['disability', disability.value]].filter(([, v]) => v)) } : {}),
         state: a.state.value.trim(), lga: a.lga.value.trim(), community: community.value.trim() || undefined,
         consent: cw.value(), source: user.role === 'field_agent' ? 'field_agent' : 'admin', isSynthetic: test.checked,
         farm: { crop: crop.value.trim(), ...(area.value ? { reportedAreaHa: Number(area.value) } : {}),
@@ -364,6 +369,9 @@ SCREENS.register = (el) => {
     field('Community', community), field('Main crop', crop), field('Farm size (hectares)', area, 'What the farmer reports.')),
   h('h3', {}, 'Contact person (optional if the farmer has a phone)'),
   field('Who can reach the farmer?', ctype), cbox,
+  h('h3', {}, 'About the farmer (optional)'),
+  h('p', { class: 'hint' }, 'Ask kindly. Every answer is voluntary and "Prefers not to say" is fine. This only helps us report on who is being reached; it is never shown to partners.'),
+  h('div', { class: 'grid' }, field('Gender', gender), field('Age group', ageBand), field('Lives with a disability', disability)),
   h('h3', {}, 'Farm location (optional)'),
   h('div', { class: 'grid' }, field('Latitude', lat), field('Longitude', lng), field('Accuracy (metres)', acc), field('Where did the coordinates come from?', src)),
   h('div', { class: 'btns' }, gpsBtn),
@@ -419,6 +427,39 @@ SCREENS.team = async (el) => {
     }, field('Full name', name), field('Email', email), field('Role', role),
     h('div', { class: 'wide' }, h('button', { class: 'primary', type: 'submit' }, 'Add team member'))),
     msg, h('h3', {}, 'Your team'), box);
+  await load();
+};
+
+// ---- consent details: the contact details printed in the consent text. Only the administrator can edit them. ----
+SCREENS.consentinfo = async (el) => {
+  const msg = h('div', { 'aria-live': 'polite' }); const box = h('div');
+  const canEdit = user.role === 'super_admin';
+  const SOURCE = { saved: ['Saved by you', ''], default: ['Default', 'info'], missing: ['Not set yet', 'warn'] };
+  const hints = { registeredAddress: 'Street, town, state.', retention: 'For example: 2 years after the last update.', hosting: 'For example: MongoDB Atlas (AWS, Ireland) and Render (Frankfurt).' };
+  const show = (r) => {
+    box.replaceChildren(
+      r.incomplete ? note(`The consent text still has gaps: ${r.missingPlaceholders.join(', ')}. Agents will see them in [brackets].`, 'info') : note('The consent text is complete.', 'ok'),
+      table(['Detail', 'Shown to farmers as', 'Source'], r.data.map((d) => [d.label[0].toUpperCase() + d.label.slice(1), d.value || h('em', {}, 'not set'), h('span', { class: `badge ${SOURCE[d.source][1]}` }, SOURCE[d.source][0])])),
+      canEdit ? h('div', { class: 'btns' }, h('button', { type: 'button', class: 'primary', onclick: () => edit(r) }, 'Edit')) : h('p', { class: 'help' }, 'Only the administrator can edit these.'));
+  };
+  const edit = (r) => {
+    const inputs = Object.fromEntries(r.data.map((d) => [d.key, h('input', { id: `cd-${d.key}`, value: d.value, maxlength: 300 })]));
+    box.replaceChildren(h('form', {
+      class: 'grid',
+      onsubmit: async (e) => {
+        e.preventDefault(); msg.replaceChildren();
+        const body = Object.fromEntries(r.data.filter((d) => inputs[d.key].value.trim() !== d.value).map((d) => [d.key, inputs[d.key].value.trim()]));
+        if (!Object.keys(body).length) return load();
+        try {
+          const out = await call('/v1/admin/consent-details', { method: 'PUT', body });
+          msg.replaceChildren(note('Saved. New consents will show the updated text. Consents already recorded keep the text the farmer was shown.', 'ok')); show(out);
+        } catch (err) { msg.replaceChildren(fail(err)); }
+      },
+    }, ...r.data.map((d) => field(d.label[0].toUpperCase() + d.label.slice(1), inputs[d.key], hints[d.key])),
+    h('div', { class: 'wide btns' }, h('button', { class: 'primary', type: 'submit' }, 'Save'), h('button', { type: 'button', class: 'secondary', onclick: () => load() }, 'Cancel'))));
+  };
+  const load = async () => { try { show(await call('/v1/admin/consent-details')); } catch (e) { box.replaceChildren(fail(e)); } };
+  el.append(h('p', { class: 'sub' }, 'These details are printed in the consent text farmers hear and agree to. Keep them correct: contact details, how long records are kept, and where data is hosted.'), msg, box);
   await load();
 };
 

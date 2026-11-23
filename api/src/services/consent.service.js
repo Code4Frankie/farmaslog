@@ -1,10 +1,10 @@
 import crypto from 'node:crypto';
-import { env } from '../config/env.js';
+import { consentDetails } from './settings.service.js';
 import { AppError } from '../utils/AppError.js';
 import { writeAudit } from './audit.service.js';
 import { CURRENT_CONSENT_VERSION, isLegacyVersion, renderConsent } from '../config/consent.js';
 
-export const consentValues = () => env.consent;
+export const consentValues = () => consentDetails();
 
 export function getConsent({ version = CURRENT_CONSENT_VERSION, language = 'en' } = {}) {
   return renderConsent({ version, language, values: consentValues() });

@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { FARMER_STATUS, FARMER_SOURCE, CONTACT_TYPES } from '../config/constants.js';
+import { FARMER_STATUS, FARMER_SOURCE, CONTACT_TYPES, INCLUSION } from '../config/constants.js';
 import { CONSENT_METHODS, CONSENT_STATUSES } from '../config/consent.js';
 
 const { Schema } = mongoose;
@@ -18,6 +18,13 @@ const farmerSchema = new Schema(
       name: { type: String, trim: true },
       phoneNormalized: String,
       relationship: { type: String, trim: true },
+      _id: false,
+    },
+    // Optional, voluntary. Age is a band, never a date of birth.
+    inclusion: {
+      gender: { type: String, enum: INCLUSION.gender },
+      ageBand: { type: String, enum: INCLUSION.ageBand },
+      disability: { type: String, enum: INCLUSION.disability },
       _id: false,
     },
     state: { type: String, required: true, trim: true },
@@ -67,5 +74,6 @@ farmerSchema.index({ phoneNormalized: 1, status: 1 });
 farmerSchema.index({ state: 1, lga: 1, status: 1 });
 farmerSchema.index({ registeredBy: 1, createdAt: -1 });
 farmerSchema.index({ consentStatus: 1 });
+farmerSchema.index({ 'inclusion.gender': 1 });
 
 export const Farmer = mongoose.model('Farmer', farmerSchema);

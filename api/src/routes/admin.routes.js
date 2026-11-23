@@ -8,11 +8,15 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { AppError } from '../utils/AppError.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
-import { usageSchema, logListSchema } from '../validators/index.js';
+import { usageSchema, logListSchema, inclusionStatsSchema, consentDetailsSchema } from '../validators/index.js';
+import { consentDetailsView, updateConsentDetails } from '../services/settings.service.js';
+import { getConsent } from '../services/consent.service.js';
+import { auditCtx } from '../services/audit.service.js';
+import { inclusionStats } from '../services/inclusion.service.js';
 
-const { SUPER_ADMIN, FINANCE, AUDITOR, PARTNER_VERIFIER } = ROLES;
+const { SUPER_ADMIN, DATA_MANAGER, FINANCE, AUDITOR, PARTNER_VERIFIER } = ROLES;
 const router = Router();
-router.use(['/usage', '/verification-logs', '/audit-logs'], authenticate);
+router.use(['/usage', '/verification-logs', '/audit-logs', '/admin/inclusion-stats', '/admin/consent-details'], authenticate);
 
 // Partner users can only ever see their own partner's data.
 function partnerFilter(req, requested) {
@@ -52,6 +56,24 @@ router.get('/usage', authorize(SUPER_ADMIN, FINANCE, AUDITOR, PARTNER_VERIFIER),
       requests: r.requests, billableUnits: r.billableUnits, errors: r.errors, avgLatencyMs: Math.round(r.avgLatencyMs),
     })),
   });
+}));
+
+// Inclusion statistics for funder reporting: aggregate counts only, small groups hidden. Never available to partners.
+router.get('/admin/inclusion-stats', authorize(SUPER_ADMIN, DATA_MANAGER, AUDITOR), validate(inclusionStatsSchema, 'query'), asyncHandler(async (req, res) => {
+  res.json(await inclusionStats(req.query));
+}));
+
+// Consent contact details (address, email, phone, WhatsApp, retention, hosting) shown to farmers in the consent text.
+// Only an administrator can change them; every change is audited. New consents use the new text; consents already given keep
+// the hash of the exact text the farmer was shown.
+router.get('/admin/consent-details', authorize(SUPER_ADMIN, DATA_MANAGER, AUDITOR), asyncHandler(async (req, res) => {
+  const c = getConsent();
+  res.json({ data: consentDetailsView(), incomplete: c.incomplete, missingPlaceholders: c.missingPlaceholders });
+}));
+router.put('/admin/consent-details', authorize(SUPER_ADMIN), validate(consentDetailsSchema), asyncHandler(async (req, res) => {
+  const { changed } = await updateConsentDetails(req.body, auditCtx(req));
+  const c = getConsent();
+  res.json({ data: consentDetailsView(), changed, incomplete: c.incomplete, missingPlaceholders: c.missingPlaceholders });
 }));
 
 router.get('/verification-logs', authorize(SUPER_ADMIN, FINANCE, AUDITOR, PARTNER_VERIFIER), validate(logListSchema, 'query'), asyncHandler(async (req, res) => {

@@ -1,4 +1,4 @@
-import { CONTACT_TYPES } from '../config/constants.js';
+import { CONTACT_TYPES, INCLUSION } from '../config/constants.js';
 import { KNOWN_VERSIONS, CURRENT_CONSENT_VERSION, LANGUAGES, CONSENT_METHODS, CONSENT_STATUSES, TEXTS } from '../config/consent.js';
 import Joi from 'joi';
 import { FARMASLOG_ID_RE } from '../utils/ids.js';
@@ -64,10 +64,32 @@ export const contactViaSchema = Joi.object({
   relationship: Joi.string().trim().max(60).allow(''),
 });
 
+export const inclusionSchema = Joi.object({
+  gender: Joi.string().valid(...INCLUSION.gender),
+  ageBand: Joi.string().valid(...INCLUSION.ageBand),
+  disability: Joi.string().valid(...INCLUSION.disability),
+}).min(1);
+
+// Consent contact details an administrator can edit. An empty string removes the saved value.
+export const consentDetailsSchema = Joi.object({
+  registeredAddress: Joi.string().trim().max(300).allow(''),
+  email: Joi.string().trim().email({ tlds: { allow: false } }).max(120).allow(''),
+  phone: Joi.string().trim().pattern(/^[0-9+() -]{7,25}$/).allow('').messages({ 'string.pattern.base': 'Enter a valid phone number.' }),
+  whatsapp: Joi.string().trim().pattern(/^[0-9+() -]{7,25}$/).allow('').messages({ 'string.pattern.base': 'Enter a valid WhatsApp number.' }),
+  retention: Joi.string().trim().max(120).allow(''),
+  hosting: Joi.string().trim().max(200).allow(''),
+}).min(1);
+
+export const inclusionStatsSchema = Joi.object({
+  state: Joi.string().trim().max(60), lga: Joi.string().trim().max(60),
+  groupBy: Joi.string().valid('state', 'lga'),
+});
+
 export const registerFarmerSchema = Joi.object({
   name: Joi.string().trim().min(2).max(120).required(),
   phone: Joi.string().trim().max(25),
   contactVia: contactViaSchema,
+  inclusion: inclusionSchema,
   state: Joi.string().trim().max(60).required(),
   lga: Joi.string().trim().max(60).required(),
   ward: Joi.string().trim().max(80).allow('', null),
@@ -91,6 +113,7 @@ export const patchFarmerSchema = Joi.object({
   phone: Joi.string().trim().max(25).allow(null, ''), // null/'' removes it (only if a contact person remains)
   contactVia: contactViaSchema.allow(null),
   sharedPhone: Joi.boolean(),
+  inclusion: inclusionSchema,
   state: Joi.string().trim().max(60),
   lga: Joi.string().trim().max(60),
   ward: Joi.string().trim().max(80).allow(''),

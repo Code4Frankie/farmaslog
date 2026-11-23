@@ -1,5 +1,19 @@
 # Changelog
 
+## Consent details editable, with FarmasLog contact defaults
+- The consent text's contact details now default to the published ones (phone 0802 863 8349, WhatsApp 0706 758 4686, email info@frankiecode.org.ng). Address, retention period and hosting still show as [bracketed] gaps until set.
+- `GET /v1/admin/consent-details` (super admin, data manager, auditor) and `PUT /v1/admin/consent-details` (super admin only, audited). Saved values beat `CONSENT_*` env vars, which beat the defaults. An empty string removes a saved value. Stored in a new `settings` collection, loaded at startup.
+- New consents use the new text and hash; consents already recorded keep the hash of the text the farmer saw.
+- Web: new "Consent info" tab (administrator edits with an Edit button; data managers read only). Site footer shows the phone and email.
+- Tests: `tests/integration/consent-details.test.js`.
+
+## Phase 3: Inclusion fields and statistics
+- New optional, voluntary fields on a farmer: `inclusion.gender` (`female` | `male` | `other` | `prefer_not_to_say`), `inclusion.ageBand` (`18_24` ... `65_plus`, `prefer_not_to_say`) and `inclusion.disability` (`none` | `yes` | `prefer_not_to_say`). Age is a band, never a date of birth. Accepted on registration and `PATCH /v1/farmers/:id` (only the fields sent change; audited).
+- Staff-only: never returned by `/v1/verify`, never used for matching, billing or eligibility.
+- `GET /v1/admin/inclusion-stats` (super admin, data manager, auditor): aggregate counts by gender, age band and disability, optional `state`/`lga` filter and `groupBy=state|lga`. Rejected and withdrawn records are excluded; unanswered shows as `not_recorded`. Groups of 1 to 4 are hidden (`count: null, suppressed: true`), and a lone hidden group is protected from subtraction by also hiding the smallest visible group.
+- Web: "About the farmer (optional)" on the Register screen.
+- Tests: `tests/integration/inclusion.test.js`.
+
 ## Phase 2: Optional phone, contact person, shared phones
 - A farmer no longer needs a phone. Registration needs the farmer's `phone` OR a `contactVia` (`farmer` | `relative` | `cooperative_leader` | `agent`, with name, phone, relationship). The FarmasLog ID is the identity key. A contact person's number is never used to look the farmer up.
 - A phone may be shared. The "one active farmer per phone" unique index is dropped by a startup migration (`migrations/phone.js`). `sharedPhone` is set automatically on both records when a different person uses the same number, and a data manager can correct it (`PATCH /v1/farmers/:id`).

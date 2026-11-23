@@ -34,9 +34,10 @@ export const env = {
   // Consent text placeholders (see src/config/consent.js). Unset values show as [bracketed] gaps in the consent text.
   consent: {
     registeredAddress: process.env.CONSENT_REGISTERED_ADDRESS || '',
-    email: process.env.CONSENT_CONTACT_EMAIL || '',
-    phone: process.env.CONSENT_CONTACT_PHONE || '',
-    whatsapp: process.env.CONSENT_CONTACT_WHATSAPP || '',
+    // Defaults are FarmasLog's published contact details (frankiecode.org.ng/about). An administrator can edit them in the dashboard.
+    email: process.env.CONSENT_CONTACT_EMAIL || 'info@frankiecode.org.ng',
+    phone: process.env.CONSENT_CONTACT_PHONE || '0802 863 8349',
+    whatsapp: process.env.CONSENT_CONTACT_WHATSAPP || '0706 758 4686',
     retention: process.env.CONSENT_RETENTION_PERIOD || '',
     hosting: process.env.CONSENT_HOSTING || '',
     // When true, records flagged needs_reconsent are hidden from partner verification. Withdrawn records are ALWAYS hidden.
