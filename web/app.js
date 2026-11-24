@@ -24,9 +24,12 @@ const h = (tag, attrs = {}, ...kids) => {
   el.append(...kids.flat().filter((x) => x != null && x !== false));
   return el;
 };
+// The sign-in lasts as long as the tab, except for field agents (see keepOnPhone): they work with no signal, so the app must reopen.
 const session = {
-  get token() { try { return sessionStorage.getItem('fl_token'); } catch { return null; } },
-  save(t) { try { if (t) sessionStorage.setItem('fl_token', t); else sessionStorage.removeItem('fl_token'); } catch { /* storage blocked */ } },
+  get token() { try { return sessionStorage.getItem('fl_token') || localStorage.getItem('fl_token'); } catch { return null; } },
+  get cachedUser() { try { return JSON.parse(localStorage.getItem('fl_user')); } catch { return null; } },
+  save(t) { try { if (t) sessionStorage.setItem('fl_token', t); else { sessionStorage.removeItem('fl_token'); localStorage.removeItem('fl_token'); localStorage.removeItem('fl_user'); } } catch { /* storage blocked */ } },
+  keepOnPhone(t, u) { try { localStorage.setItem('fl_token', t); localStorage.setItem('fl_user', JSON.stringify({ id: u.id, name: u.name, role: u.role, email: u.email })); } catch { /* storage blocked */ } },
 };
 class ApiError extends Error { constructor(status, code, message, details) { super(message); this.status = status; this.code = code; this.details = details; } }
 
@@ -236,6 +239,79 @@ SCREENS.approvals = async (el) => {
   el.append(msg, h('h3', {}, 'Organisations and agencies'), orgs, h('h3', {}, 'Field agent applications'), agents); await load();
 };
 
+// ---- offline register: farmers saved on this phone while there is no signal, uploaded later ----
+// Records wait in this browser's storage (per signed-in agent), each with a clientId so uploading twice never creates two farmers.
+const lsGet = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
+const newClientId = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2, 12)}`);
+const outbox = {
+  key: () => `fl_outbox_${user?.id}`,
+  list: () => lsGet(outbox.key(), []),
+  add: (item) => lsSet(outbox.key(), [...outbox.list(), item]),
+  remove: (ids) => lsSet(outbox.key(), outbox.list().filter((x) => !ids.includes(x.clientId))),
+  setErrors: (errs) => lsSet(outbox.key(), outbox.list().map((x) => (errs[x.clientId] ? { ...x, lastError: errs[x.clientId] } : x))),
+};
+const isNetworkError = (e) => e?.code === 'NETWORK' || e?.status === 0;
+const SYNC_DONE = ['created', 'already_synced', 'duplicate_review'];
+let syncing = false;
+/** Upload everything waiting on this phone. Returns { created, already, review, failed, left } or { offline: true }. */
+async function syncOutbox() {
+  if (syncing || !user || DEMO) return { created: 0, already: 0, review: 0, failed: 0, left: outbox.list().length };
+  const items = outbox.list(); const tally = { created: 0, already: 0, review: 0, failed: 0 };
+  if (!items.length) return { ...tally, left: 0 };
+  syncing = true;
+  try {
+    for (let i = 0; i < items.length; i += 25) {
+      const chunk = items.slice(i, i + 25);
+      const r = await call('/v1/farmers/sync', { method: 'POST', body: { records: chunk.map((x) => ({ ...x.body, clientId: x.clientId, capturedAt: x.capturedAt })) } });
+      const errs = {};
+      for (const res of r.results) {
+        if (res.status === 'created') tally.created += 1; else if (res.status === 'already_synced') tally.already += 1; else if (res.status === 'duplicate_review') tally.review += 1;
+        else { tally.failed += 1; errs[res.clientId] = [res.message, ...(res.details || [])].join(' '); }
+      }
+      outbox.remove(r.results.filter((x) => SYNC_DONE.includes(x.status)).map((x) => x.clientId));
+      outbox.setErrors(errs);
+    }
+    return { ...tally, left: outbox.list().length };
+  } catch (e) {
+    if (isNetworkError(e)) return { ...tally, offline: true, left: outbox.list().length };
+    throw e;
+  } finally { syncing = false; }
+}
+const syncText = (s) => (s.offline ? 'Still no signal. Your farmers are safe on this phone.' : [
+  s.created + s.already ? `${s.created + s.already} uploaded.` : '', s.review ? `${s.review} uploaded and sent for a duplicate check.` : '',
+  s.failed ? `${s.failed} could not be uploaded: see below.` : '', !s.created && !s.already && !s.review && !s.failed ? 'Nothing waiting.' : ''].filter(Boolean).join(' '));
+
+/** The "saved on this phone" box. Shown at the top of the Register and My work screens. */
+function outboxPanel(onChange) {
+  const box = h('div', { class: 'outbox', 'aria-live': 'polite' }); let status = null;
+  const render = () => {
+    const items = outbox.list();
+    const parts = [];
+    if (!navigator.onLine) parts.push(note('You have no signal. Keep registering farmers: they are saved on this phone and upload when you are back online.', 'info'));
+    if (items.length) {
+      parts.push(h('h3', {}, `Saved on this phone (${items.length})`),
+        h('p', { class: 'help' }, 'These have not reached FarmasLog yet. Keep this phone safe, and do not clear the browser data until they have uploaded.'),
+        h('ul', { class: 'outlist' }, items.map((x) => h('li', {}, h('strong', {}, x.body.name), ` · saved ${new Date(x.capturedAt).toLocaleString()}`,
+          x.lastError ? h('span', { class: 'err' }, ` ${x.lastError}`) : null,
+          h('button', { type: 'button', class: 'secondary', onclick: () => { if (confirm(`Delete ${x.body.name} from this phone? It has not been uploaded.`)) { outbox.remove([x.clientId]); render(); onChange?.(); } } }, 'Delete')))),
+        h('div', { class: 'btns' }, h('button', { type: 'button', class: 'primary', onclick: async () => {
+          status = note('Uploading…', 'info'); render();
+          try { const s = await syncOutbox(); status = note(syncText(s), s.failed || s.offline ? 'info' : 'ok'); } catch (e) { status = fail(e); }
+          render(); onChange?.();
+        } }, 'Upload now')));
+    }
+    if (status) parts.push(status);
+    box.replaceChildren(...parts);
+  };
+  render();
+  box.refresh = render;
+  window.addEventListener('online', render); window.addEventListener('offline', render);
+  return box;
+}
+// When the phone gets signal back, upload quietly.
+window.addEventListener('online', () => { if (user?.role === 'field_agent') syncOutbox().then((s) => { if (s.created + s.already + s.review) document.querySelector('.outbox')?.refresh?.(); }).catch(() => {}); });
+
 // ---- consent: text comes from the API; the version and language shown are the ones submitted ----
 const LANG_NAMES = { en: 'English', ha: 'Hausa', yo: 'Yoruba', ig: 'Igbo', tiv: 'Tiv', pcm: 'Nigerian Pidgin' };
 const METHODS = [['agent_read_aloud', 'Agent read it aloud'], ['agent_checkbox', 'Farmer read it, agent ticked'], ['self_checkbox', 'Farmer ticked it themselves']];
@@ -262,7 +338,11 @@ function consentWidget({ self = false } = {}) {
       h('p', {}, h('strong', {}, data.agreementsIntro)));
   };
   const load = async () => {
-    try { data = await call(`/v1/reference/consent?lang=${lang.value}`); render(); } catch (e) { body.replaceChildren(fail(e)); }
+    try { data = await call(`/v1/reference/consent?lang=${lang.value}`); lsSet(`fl_consent_${lang.value}`, data); render(); }
+    catch (e) {
+      const cached = isNetworkError(e) ? lsGet(`fl_consent_${lang.value}`, null) : null; // offline: use the copy saved when the phone last had signal
+      if (cached) { data = cached; render(); body.prepend(note('You are offline. This is the consent text saved on your phone.', 'info')); } else body.replaceChildren(fail(e));
+    }
   };
   lang.addEventListener('change', load);
   wrap.append(field('Language the farmer will hear or read', lang), body,
@@ -360,12 +440,14 @@ SCREENS.register = (el) => {
       if (!cw.valid()) return out.append(note('Tick the first agreement only after the farmer has clearly said yes. If the consent text did not load, check your connection.'));
       if (!phone.value.trim() && !ctype.value) return out.append(note('Enter the farmer\'s phone number, or choose a contact person who can reach them.'));
       if (ctype.value && ctype.value !== 'agent' && !cphone.value.trim()) return out.append(note('Enter the contact person\'s phone number.'));
+      const clientId = newClientId(); const capturedAt = new Date().toISOString();
       const body = {
         name: name.value.trim(), ...(phone.value.trim() ? { phone: phone.value.trim() } : {}),
         ...(ctype.value ? { contactVia: { type: ctype.value, name: cname.value.trim(), phone: cphone.value.trim(), relationship: crel.value.trim() } } : {}),
         ...(gender.value || ageBand.value || disability.value ? { inclusion: Object.fromEntries([['gender', gender.value], ['ageBand', ageBand.value], ['disability', disability.value]].filter(([, v]) => v)) } : {}),
         state: a.state.value.trim(), lga: a.lga.value.trim(), community: community.value.trim() || undefined,
         consent: cw.value(), source: user.role === 'field_agent' ? 'field_agent' : 'admin', isSynthetic: test.checked,
+        ...(user.role === 'field_agent' ? { sourceRef: `app:${user.id}:${clientId}`, sourceChannel: 'field_app', submittedAt: capturedAt } : {}),
         farm: { crop: crop.value.trim(), ...(area.value ? { reportedAreaHa: Number(area.value) } : {}),
           ...(lat.value && lng.value ? { location: { lat: Number(lat.value), lng: Number(lng.value), source: src.value, ...(acc.value ? { accuracyMeters: Number(acc.value) } : {}) } } : {}) },
       };
@@ -373,7 +455,16 @@ SCREENS.register = (el) => {
         const r = await call('/v1/farmers', { method: 'POST', body });
         out.append(note(`${r.name}: ${r.message}${r.farmaslogId ? ` FarmasLog ID ${r.farmaslogId}.` : ''}${r.sharedPhone && !r.duplicateCandidate ? ' This phone number is shared with another farmer.' : ''}${(r.warnings || []).length ? ` Note: ${r.warnings.join(', ').replaceAll('_', ' ')}.` : ''}`, r.duplicateCandidate ? 'info' : 'ok'));
         form.reset(); cw.reset(); cbox.hidden = true;
-      } catch (err) { out.append(fail(err)); }
+      } catch (err) {
+        if (user.role === 'field_agent' && isNetworkError(err)) {
+          // No signal: keep the farmer on this phone. Same clientId as the failed attempt, so if it did reach the server it is not created twice.
+          const { source, sourceRef, sourceChannel, submittedAt, ...rest } = body; // eslint-disable-line no-unused-vars
+          if (outbox.add({ clientId, capturedAt, body: rest })) {
+            out.append(note(`${body.name} is saved on this phone. It will upload by itself when you have signal.`, 'ok'));
+            form.reset(); cw.reset(); cbox.hidden = true; panel.refresh();
+          } else out.append(note('This phone has no space left to save the farmer. Free some space or get signal, and try again.'));
+        } else out.append(fail(err));
+      }
     },
   },
   h('div', { class: 'grid' }, field('Full name', name), field('Phone number', phone, 'Leave empty if the farmer has no phone, and add a contact person below.'), field('State', a.state), field('Local government area', a.lga), ...a.lists,
@@ -390,7 +481,8 @@ SCREENS.register = (el) => {
   cw.el,
   h('div', { class: 'check' }, test, h('label', { for: 'r-test' }, 'This is a test record (for demos).')),
   h('div', { class: 'btns' }, h('button', { class: 'primary', type: 'submit' }, 'Register farmer')));
-  el.append(form, out);
+  const panel = user.role === 'field_agent' ? outboxPanel() : h('div');
+  el.append(panel, form, out);
 };
 
 // ---- team: the administrator onboards FarmasLog staff (field agents and others) ----
@@ -474,7 +566,7 @@ SCREENS.mywork = async (el) => {
     ])) : note('No farms are waiting for a visit. New approved farmers will show up here.', 'info'));
   };
   const scopeBox = h('div', { class: 'btns' });
-  el.append(h('p', { class: 'sub' }, 'Your numbers, and the approved farmers whose farms still need a visit. Only a visit by an agent makes a record "verified".'), tiles, msg, h('h3', {}, 'Farms to visit'), scopeBox, box);
+  el.append(outboxPanel(() => load().catch(() => {})), h('p', { class: 'sub' }, 'Your numbers, and the approved farmers whose farms still need a visit. Only a visit by an agent makes a record "verified".'), tiles, msg, h('h3', {}, 'Farms to visit'), scopeBox, box);
   await load();
 };
 
@@ -565,6 +657,7 @@ async function openScreen(name) {
 
 async function enter(u) {
   user = u;
+  if (u.role === 'field_agent' && navigator.onLine) for (const l of Object.keys(LANG_NAMES)) call(`/v1/reference/consent?lang=${l}`).then((c) => lsSet(`fl_consent_${l}`, c)).catch(() => {}); // keep the consent text on the phone
   $('#org').textContent = `${u.name}${u.organization ? `, ${u.organization}` : ''}`;
   $('#role').textContent = ROLES[u.role] || u.role;
   const tabs = u.mustChangePassword ? ['password'] : TABS[u.role] || [];
@@ -572,7 +665,9 @@ async function enter(u) {
   show('app');
   if (tabs.length) await openScreen(tabs[0]);
 }
-function signOut() { session.save(null); user = null; lastKey = ''; location.hash = '#/signin'; route(); }
+function signOut() {
+  if (user && outbox.list().length && !confirm(`${outbox.list().length} farmer(s) are saved on this phone and have not uploaded. They stay here until you sign in again and upload them. Sign out anyway?`)) return;
+  session.save(null); user = null; lastKey = ''; location.hash = '#/signin'; route(); }
 
 function message(form, err) {
   const box = form.querySelector('.msg');
@@ -593,7 +688,7 @@ function bind(form, handler) {
 for (const input of document.querySelectorAll('#form-signin input[type=password], #form-signup input[type=password], #form-agent input[type=password]')) eye(input);
 bind($('#form-signin'), async ({ email, password }) => {
   const r = await api('/v1/auth/login', { method: 'POST', body: { email: email.trim(), password } });
-  session.save(r.token); await enter(r.user); location.hash = '#/app';
+  session.save(r.token); if (r.user.role === 'field_agent') session.keepOnPhone(r.token, r.user); await enter(r.user); location.hash = '#/app';
 });
 bind($('#form-signup'), async (f) => {
   await api('/v1/auth/signup', { method: 'POST', body: { ...f, email: f.email.trim(), organization: f.organization.trim(), name: f.name.trim() } });
@@ -751,10 +846,17 @@ const markNav = () => {
 };
 window.addEventListener('hashchange', () => { route(true); markNav(); });
 
+if ('serviceWorker' in navigator && location.protocol === 'https:' || location.hostname === 'localhost') navigator.serviceWorker?.register('sw.js').catch(() => {});
+
 (async function init() {
   if (DEMO) { $('#demo-banner').hidden = false; $('#demo-hint').hidden = false; }
   if (session.token) {
-    try { await enter((await api('/v1/auth/me', { token: session.token })).user); return; } catch { session.save(null); }
+    try { const me = (await api('/v1/auth/me', { token: session.token })).user; if (me.role === 'field_agent') session.keepOnPhone(session.token, me); await enter(me); if (me.role === 'field_agent') syncOutbox().catch(() => {}); return; }
+    catch (e) {
+      // No signal: a field agent can still open the app and register farmers from the saved sign-in.
+      if (isNetworkError(e) && session.cachedUser?.role === 'field_agent') { await enter(session.cachedUser); return; }
+      if (!isNetworkError(e)) session.save(null);
+    }
   }
   route(); markNav();
 })();

@@ -15,12 +15,13 @@ import { authenticate, authorize } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { auditCtx, writeAudit } from '../services/audit.service.js';
 import { agentScope } from '../services/agent.service.js';
+import { syncOfflineRegistrations } from '../services/sync.service.js';
 import { registerFarmer, updateFarmer, reviewFarmer, recordFieldVerification } from '../services/farmer.service.js';
 import { withdrawConsent, recordReconsent } from '../services/consent.service.js';
 import { queueEnrichment } from '../services/enrichment/enrichment.service.js';
 import { farmerView } from '../services/serializers.js';
 import {
-  consentWithdrawalSchema, reconsentSchema, registerFarmerSchema, patchFarmerSchema, reviewSchema, fieldVerificationSchema, listFarmersSchema,
+  syncBatchSchema, consentWithdrawalSchema, reconsentSchema, registerFarmerSchema, patchFarmerSchema, reviewSchema, fieldVerificationSchema, listFarmersSchema,
 } from '../validators/index.js';
 
 const { SUPER_ADMIN, DATA_MANAGER, FIELD_AGENT, AUDITOR } = ROLES;
@@ -44,6 +45,13 @@ router.param('id', async (req, _res, next, id) => {
 });
 
 router.post('/', authorize(SUPER_ADMIN, DATA_MANAGER, FIELD_AGENT), validate(registerFarmerSchema), asyncHandler(async (req, res) => {
+  if (req.user.role === FIELD_AGENT) {
+    // The app marks each registration with its own reference so a retry after a dropped connection is not created twice.
+    // An agent can only use references in their own namespace, and cannot pose as another channel.
+    if (req.body.sourceRef && !new RegExp(`^app:${req.user.id}:[A-Za-z0-9-]{8,64}$`).test(req.body.sourceRef)) throw new AppError(400, 'INVALID_SOURCE_REF', 'That reference is not allowed.');
+    req.body.source = 'field_agent';
+    if (req.body.sourceChannel && req.body.sourceChannel !== 'field_app') req.body.sourceChannel = 'field_app';
+  }
   const { farmer, farm, isDuplicate, alreadyImported, warnings } = await registerFarmer(req.body, auditCtx(req));
   res.status(alreadyImported ? 200 : 201).json({
     ...farmerView(farmer, farm),
@@ -54,6 +62,11 @@ router.post('/', authorize(SUPER_ADMIN, DATA_MANAGER, FIELD_AGENT), validate(reg
       ? 'A record with the same name, local government area and phone number already exists. This submission is held for review and no FarmasLog ID has been issued.'
       : 'Registered. The record is pending review before it can be verified by partners.',
   });
+}));
+
+// A field agent's phone uploads what it saved while offline (up to 25 at a time). Each record gets its own result.
+router.post('/sync', authorize(SUPER_ADMIN, DATA_MANAGER, FIELD_AGENT), validate(syncBatchSchema), asyncHandler(async (req, res) => {
+  res.json(await syncOfflineRegistrations(req.body.records, req.user, auditCtx(req)));
 }));
 
 router.get('/', validate(listFarmersSchema, 'query'), asyncHandler(async (req, res) => {

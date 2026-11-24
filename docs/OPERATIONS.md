@@ -45,3 +45,10 @@ Farmers prove they control a phone number with a 6-digit code sent by text messa
 **Privacy**: the phone number and code are never logged or stored in the clear (only keyed hashes). Audit entries hold the purpose and a short hash reference. The API answers the same for numbers that are on FarmasLog and numbers that are not.
 
 **Website (Vercel)**: add `FARMASLOG_TURNSTILE_SITE_KEY` (the Turnstile *site* key, which is public) in the Vercel project settings, then redeploy with `cd web && npx vercel --prod`. Without it the farmer form shows no security check, and in production the API will refuse code requests (captcha required). Self-registered farmers appear in the Farmers list as "Pending review" with source `self_registration`; approve them like any other record.
+
+## Offline register (field agents)
+- Agents must open the site once with signal, sign in, and visit the Register tab. That saves the app, the area list and the consent text on the phone. After that the app opens with no signal.
+- Farmers registered with no signal are kept in the browser's storage on that phone and upload by themselves when it is online again (or from "Upload now" on the Register or My work tab). Tell agents: use one browser, do not clear its data, and do not sign out until the box says nothing is waiting.
+- The phone's clock matters: it dates the farmer's consent. A phone clock that is more than 10 minutes ahead makes the upload fail with a message to fix the date.
+- This keeps farmers' personal details on the agent's phone until upload. Ask agents to use a phone lock screen. Later we can add encryption at rest or an installable app.
+- After a deploy the app updates itself next time the phone has signal (the service worker checks the network first).

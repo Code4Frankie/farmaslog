@@ -1,5 +1,13 @@
 # Changelog
 
+## Phase 7: Offline register
+- Field agents can register farmers with no signal. The app (service worker `web/sw.js`) reopens offline, the consent text for every language is kept on the phone, and a farmer saved offline waits in the browser's storage ("Saved on this phone") until the phone has signal. It then uploads by itself, or with "Upload now". Agents stay signed in on the phone (until the 8-hour sign-in expires) so the app can open without signal.
+- `POST /v1/farmers/sync` (up to 25 records): each record is the usual registration plus `clientId` and `capturedAt`. The server sets source (`field_agent`), channel (`field_app`) and the reference (`app:<agentId>:<clientId>`), so uploading twice, or an online retry after a lost answer, never creates two farmers. Each record gets its own result (`created`, `already_synced`, `duplicate_review`, `error`); a bad record never blocks the others. Consent is dated `capturedAt` and stamped with the server's `recordedAt`. A capture time in the future (more than 10 minutes) or older than 120 days is refused.
+- `POST /v1/farmers` by a field agent: `sourceRef` must be in the agent's own `app:` namespace; source and channel are forced.
+- Everything else is unchanged: offline records arrive as `pending_review`, are reviewed by a data manager, duplicates wait in duplicate review, and only a farm visit makes a record "verified". Audit: each farmer as before, plus one `farmer.offline_sync` summary with counts only.
+- Limits: unsent farmers live on that phone, in that browser. Clearing browser data, a different browser, or a lost phone loses them. Signing out with unsent farmers asks first.
+- Tests: `tests/integration/offline-sync.test.js`.
+
 ## Phase 6: Agent console
 - `GET /v1/agent/summary` and `GET /v1/agent/visits?scope=mine|area|all` (field agents only). Summary: registrations by status, farms waiting for a visit, farms verified by me, records needing new consent, and my patch. Visits: approved farmers whose farm has no confirming visit and who have not withdrawn consent, longest waiting first.
 - A field agent's patch is the state (and optional LGA) on their account. Within it they can now open and field-verify approved farmers registered by others, including farmers who registered themselves on the website. They still cannot change consent or files on records they did not register, and the Farmers list is still their own registrations only. An agent with no state set has no patch.

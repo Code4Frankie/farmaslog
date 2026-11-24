@@ -50,6 +50,12 @@ body.in-app .menu-btn { display: none; }
 .progress li::before { content: counter(s) ". "; font-weight: 700; }
 .progress li.now { background: var(--sun); color: var(--ink); border-color: var(--gold); font-weight: 700; }
 .progress li.done { background: var(--paddy); color: var(--cream); border-color: var(--paddy); }
+.outbox { margin-bottom: 1rem; }
+.outbox h3 { margin: .6rem 0 .3rem; }
+.outlist { list-style: none; padding: 0; margin: .5rem 0; }
+.outlist li { padding: .5rem 0; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: .4rem .6rem; align-items: center; }
+.outlist .err { color: var(--rust); font-size: .9rem; flex-basis: 100%; }
+.outlist button { margin-left: auto; width: auto; }
 .captcha { margin: .75rem 0; min-height: 4px; }
 .farmer-steps { padding-left: 1.2rem; line-height: 1.55; }
 .farmer-steps li { margin-bottom: .6rem; }

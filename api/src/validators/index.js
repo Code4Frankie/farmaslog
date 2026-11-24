@@ -153,6 +153,16 @@ export const registerFarmerSchema = Joi.object({
   }).required(),
 }).or('phone', 'contactVia').messages({ 'object.missing': 'Give the farmer\'s phone number, or a contact person who can reach them (contactVia).' });
 
+// One record from a field agent's phone that was saved offline. The server decides source, channel and the idempotency reference;
+// the phone only supplies a clientId and when the details were captured.
+export const syncRecordSchema = registerFarmerSchema
+  .keys({
+    clientId: Joi.string().trim().pattern(/^[A-Za-z0-9-]{8,64}$/).required(),
+    capturedAt: Joi.date().iso().required(),
+  })
+  .fork(['source', 'sourceRef', 'sourceChannel', 'submittedAt'], (s) => s.forbidden());
+export const syncBatchSchema = Joi.object({ records: Joi.array().items(Joi.object().unknown(true)).min(1).max(25).required() });
+
 export const patchFarmerSchema = Joi.object({
   name: Joi.string().trim().min(2).max(120),
   phone: Joi.string().trim().max(25).allow(null, ''), // null/'' removes it (only if a contact person remains)

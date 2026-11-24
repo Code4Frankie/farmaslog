@@ -52,6 +52,14 @@ export const openapi = {
         responses: { 200: { description: 'States / LGAs' }, 404: err('Unknown state') },
       },
     },
+    '/v1/farmers/sync': {
+      post: {
+        tags: ['Farmers'], summary: 'Upload farmers saved offline (up to 25 per call)', security: bearerJwt,
+        description: 'For the field app. Each record is the normal registration body plus `clientId` (8 to 64 letters, digits or dashes, made on the phone) and `capturedAt` (when the details were taken). `source`, `sourceRef`, `sourceChannel` and `submittedAt` are not accepted: the server sets source `field_agent`, channel `field_app` and an idempotency reference from the agent and `clientId`, so sending the same record again never creates a second farmer. The farmer\'s consent is dated `capturedAt`, and stamped with the server time it arrived. Records are judged one by one: a bad record does not block the others. Statuses: `created`, `already_synced`, `duplicate_review` (held for review, no ID), `error` (with `errorCode` and `message`). `capturedAt` more than 10 minutes in the future (`BAD_CAPTURE_TIME`) or older than 120 days (`TOO_OLD`) is refused.',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['records'], properties: { records: { type: 'array', minItems: 1, maxItems: 25, items: { type: 'object', required: ['clientId', 'capturedAt'], properties: { clientId: { type: 'string' }, capturedAt: { type: 'string', format: 'date-time' } }, additionalProperties: true } } } } } } },
+        responses: { 200: { description: '`{ created, already_synced, duplicate_review, error, results: [{ clientId, status, id?, farmaslogId?, errorCode?, message? }] }`' }, 400: err('No records, or more than 25') },
+      },
+    },
     '/v1/agent/summary': { get: { tags: ['Field agents'], summary: 'My numbers (field agent)', security: bearerJwt, description: 'Registrations by status, farms waiting for a visit (`mine` and in my `area`), farms I have verified, and my patch (the state and LGA on the agent account).', responses: { 200: { description: 'OK' }, 403: err('Field agents only') } } },
     '/v1/agent/visits': {
       get: {
