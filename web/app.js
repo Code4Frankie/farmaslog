@@ -537,7 +537,7 @@ SCREENS.password = (el) => {
 
 // ---- shell: sign in / sign up / signed-in app ----
 let current = 'signin';
-const ROUTES = { '#/signin': 'signin', '#/signup': 'signup', '#/agent': 'agent', '#/farmers': 'farmers', '#/government': 'signup' };
+const ROUTES = { '#/signin': 'signin', '#/signup': 'signup', '#/agent': 'agent', '#/farmers': 'farmers', '#/government': 'signup', '#/home': 'signin' };
 function show(name) {
   current = name;
   for (const e of document.querySelectorAll('[data-view]')) e.hidden = e.dataset.view !== name;
@@ -549,7 +549,10 @@ function route(scroll = false) {
   const next = user ? 'app' : ROUTES[location.hash] || (location.hash ? current : 'signin');
   show(next);
   if (location.hash === '#/government' && next === 'signup') $('#su-type').value = 'government'; // the Government menu item preselects the type
-  if (scroll && next !== 'app') $('.shell').scrollIntoView({ block: 'start' });
+  if (scroll && next !== 'app') {
+    if (location.hash === '#/home') window.scrollTo({ top: 0 }); // Home goes to the very top of the page
+    else $('.shell').scrollIntoView({ block: 'start' });
+  }
 }
 
 async function openScreen(name) {
@@ -736,11 +739,13 @@ const menuBtn = $('#menu-btn'); const siteNav = $('#site-nav');
 const setMenu = (open) => { siteNav.classList.toggle('open', open); menuBtn.setAttribute('aria-expanded', String(open)); };
 menuBtn.addEventListener('click', () => setMenu(menuBtn.getAttribute('aria-expanded') !== 'true'));
 siteNav.addEventListener('click', (e) => { if (e.target.closest('a')) setMenu(false); });
+// Home (menu item or logo) always returns to the top, even when the address is already #/home.
+for (const l of document.querySelectorAll('a[href="#/home"]')) l.addEventListener('click', () => { if (!user) { window.scrollTo({ top: 0 }); show('signin'); } });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && siteNav.classList.contains('open')) { setMenu(false); menuBtn.focus(); } });
 document.addEventListener('click', (e) => { if (siteNav.classList.contains('open') && !e.target.closest('.site-header')) setMenu(false); });
 const markNav = () => {
   for (const a of siteNav.querySelectorAll('a')) {
-    const here = a.dataset.route === location.hash;
+    const here = a.dataset.route === location.hash || (a.dataset.route === '#/home' && !location.hash);
     if (here) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   }
 };
