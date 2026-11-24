@@ -18,6 +18,7 @@ import referenceRoutes from './routes/reference.routes.js';
 import meRoutes from './routes/me.routes.js';
 import staffRoutes from './routes/staff.routes.js';
 import publicRoutes from './routes/public.routes.js';
+import agentRoutes from './routes/agent.routes.js';
 import { openapi } from './docs/openapi.js';
 
 export function createApp() {
@@ -52,6 +53,7 @@ export function createApp() {
   app.use('/v1/me', meRoutes);
   app.use('/v1/staff', staffRoutes);
   app.use('/v1/public', publicRoutes);
+  app.use('/v1/agent', agentRoutes);
   app.use('/v1/farmers', farmerRoutes);
   app.use('/v1', accessRoutes);
   app.use('/v1', adminRoutes);

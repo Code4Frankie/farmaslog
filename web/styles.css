@@ -40,6 +40,16 @@ body.in-app .site-nav { display: none !important; }
 .menu-btn[aria-expanded="true"] .menu-bars::before { transform: translateY(7px) rotate(45deg); }
 .menu-btn[aria-expanded="true"] .menu-bars::after { transform: translateY(-7px) rotate(-45deg); }
 body.in-app .menu-btn { display: none; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .75rem; margin: 1rem 0; }
+.tile { background: #fff; border: 1.5px solid var(--line); border-radius: 10px; padding: .8rem 1rem; display: flex; flex-direction: column; gap: .15rem; }
+.tile strong { font-size: 1.8rem; color: var(--paddy-dark); line-height: 1.1; }
+.tile span { font-size: .9rem; color: var(--muted); }
+.tile.warn { border-color: var(--amber); background: var(--butter); }
+.progress { list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; padding: 0; margin: 0 0 1rem; counter-reset: s; }
+.progress li { counter-increment: s; font-size: .85rem; padding: .3rem .7rem; border-radius: 999px; background: var(--haze); color: var(--muted); border: 1.5px solid var(--line); }
+.progress li::before { content: counter(s) ". "; font-weight: 700; }
+.progress li.now { background: var(--sun); color: var(--ink); border-color: var(--gold); font-weight: 700; }
+.progress li.done { background: var(--paddy); color: var(--cream); border-color: var(--paddy); }
 .captcha { margin: .75rem 0; min-height: 4px; }
 .farmer-steps { padding-left: 1.2rem; line-height: 1.55; }
 .farmer-steps li { margin-bottom: .6rem; }

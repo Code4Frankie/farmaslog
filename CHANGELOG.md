@@ -1,5 +1,12 @@
 # Changelog
 
+## Phase 6: Agent console
+- `GET /v1/agent/summary` and `GET /v1/agent/visits?scope=mine|area|all` (field agents only). Summary: registrations by status, farms waiting for a visit, farms verified by me, records needing new consent, and my patch. Visits: approved farmers whose farm has no confirming visit and who have not withdrawn consent, longest waiting first.
+- A field agent's patch is the state (and optional LGA) on their account. Within it they can now open and field-verify approved farmers registered by others, including farmers who registered themselves on the website. They still cannot change consent or files on records they did not register, and the Farmers list is still their own registrations only. An agent with no state set has no patch.
+- Only a visit by an agent sets "verified"; nothing else changed in the review flow. Field verifications are audited with the agent as actor, as before.
+- Web: new "My work" tab for field agents: tiles, farms to visit (All / Mine / My patch) with "Verified on site" and "Not confirmed".
+- Tests: `tests/integration/agent.test.js`.
+
 ## Phase 5: Public farmer registration
 - `POST /v1/public/registrations`: a farmer registers themselves after verifying their phone by one-time code (`phoneProof`, purpose `register`). The record is created like an agent's: `pending_review`, source `self_registration`, channel `web_form`, consent method `self_checkbox`, no FarmasLog ID until a data manager approves, and never "verified" without a field visit. Review flow unchanged.
 - Consent must be in the current wording. `partnerSharing: false` is accepted and keeps the farmer hidden from partners.

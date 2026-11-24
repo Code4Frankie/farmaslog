@@ -14,6 +14,7 @@ import { normalizeNigerianPhone } from '../utils/phone.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { auditCtx, writeAudit } from '../services/audit.service.js';
+import { agentScope } from '../services/agent.service.js';
 import { registerFarmer, updateFarmer, reviewFarmer, recordFieldVerification } from '../services/farmer.service.js';
 import { withdrawConsent, recordReconsent } from '../services/consent.service.js';
 import { queueEnrichment } from '../services/enrichment/enrichment.service.js';
@@ -28,11 +29,14 @@ router.use(authenticate, authorize(SUPER_ADMIN, DATA_MANAGER, FIELD_AGENT, AUDIT
 
 // Field agents only see records they registered; everyone else sees all.
 const scopeFor = (user) => (user.role === FIELD_AGENT ? { registeredBy: user.id } : {});
+// A field agent can open (and field-verify) farmers in their patch as well, but only change records they registered themselves.
+const ownRecordOnly = (req, _res, next) => (req.user.role === FIELD_AGENT && String(req.farmer.registeredBy) !== req.user.id
+  ? next(new AppError(404, 'FARMER_NOT_FOUND', 'Farmer not found.')) : next());
 
 router.param('id', async (req, _res, next, id) => {
   try {
     if (!mongoose.isValidObjectId(id)) throw new AppError(404, 'FARMER_NOT_FOUND', 'Farmer not found.');
-    const farmer = await Farmer.findOne({ _id: id, ...scopeFor(req.user) });
+    const farmer = await Farmer.findOne({ _id: id, ...(req.user.role === FIELD_AGENT ? agentScope(req.user) : {}) });
     if (!farmer) throw new AppError(404, 'FARMER_NOT_FOUND', 'Farmer not found.');
     req.farmer = farmer;
     next();
@@ -90,12 +94,12 @@ router.post('/:id/field-verification', authorize(SUPER_ADMIN, DATA_MANAGER, FIEL
   res.json(farmerView(req.farmer, farm));
 }));
 
-router.post('/:id/consent-withdrawal', authorize(SUPER_ADMIN, DATA_MANAGER, FIELD_AGENT), validate(consentWithdrawalSchema), asyncHandler(async (req, res) => {
+router.post('/:id/consent-withdrawal', authorize(SUPER_ADMIN, DATA_MANAGER, FIELD_AGENT), ownRecordOnly, validate(consentWithdrawalSchema), asyncHandler(async (req, res) => {
   const farmer = await withdrawConsent(req.farmer, req.body, auditCtx(req));
   res.json(farmerView(farmer, await Farm.findOne({ farmerId: farmer._id })));
 }));
 
-router.post('/:id/reconsent', authorize(SUPER_ADMIN, DATA_MANAGER, FIELD_AGENT), validate(reconsentSchema), asyncHandler(async (req, res) => {
+router.post('/:id/reconsent', authorize(SUPER_ADMIN, DATA_MANAGER, FIELD_AGENT), ownRecordOnly, validate(reconsentSchema), asyncHandler(async (req, res) => {
   const farmer = await recordReconsent(req.farmer, req.body.consent, auditCtx(req));
   res.json(farmerView(farmer, await Farm.findOne({ farmerId: farmer._id })));
 }));
@@ -133,7 +137,7 @@ async function sniff(file) {
   return null;
 }
 
-router.post('/:id/files', authorize(SUPER_ADMIN, DATA_MANAGER, FIELD_AGENT), upload.single('file'), asyncHandler(async (req, res) => {
+router.post('/:id/files', authorize(SUPER_ADMIN, DATA_MANAGER, FIELD_AGENT), ownRecordOnly, upload.single('file'), asyncHandler(async (req, res) => {
   if (!req.file) throw new AppError(400, 'FILE_REQUIRED', "Attach a file in the 'file' field.");
   if ((await sniff(req.file.path)) !== req.file.mimetype) {
     await fs.rm(req.file.path, { force: true });
@@ -147,7 +151,7 @@ router.post('/:id/files', authorize(SUPER_ADMIN, DATA_MANAGER, FIELD_AGENT), upl
   res.status(201).json({ id: String(added._id), originalName: added.originalName, mimeType: added.mimeType, size: added.size });
 }));
 
-router.get('/:id/files/:fileId', authorize(SUPER_ADMIN, DATA_MANAGER, FIELD_AGENT), asyncHandler(async (req, res) => {
+router.get('/:id/files/:fileId', authorize(SUPER_ADMIN, DATA_MANAGER, FIELD_AGENT), ownRecordOnly, asyncHandler(async (req, res) => {
   const farm = await Farm.findOne({ farmerId: req.farmer._id });
   const file = farm?.files.id(req.params.fileId);
   if (!file) throw new AppError(404, 'FILE_NOT_FOUND', 'File not found.');

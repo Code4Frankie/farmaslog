@@ -6,10 +6,10 @@ const DEMO_USER = { name: 'Demo Lender', role: 'partner_verifier', organization:
 const ROLES = { super_admin: 'Administrator', data_manager: 'Data manager', field_agent: 'Field agent', partner_verifier: 'Partner', finance: 'Finance', auditor: 'Auditor' };
 const TABS = {
   partner_verifier: ['console', 'keys', 'usage', 'password'], super_admin: ['approvals', 'farmers', 'register', 'team', 'consentinfo', 'keys', 'usage', 'password'],
-  data_manager: ['farmers', 'register', 'consentinfo', 'password'], field_agent: ['register', 'farmers', 'password'], finance: ['usage', 'password'], auditor: ['usage', 'farmers', 'password'],
+  data_manager: ['farmers', 'register', 'consentinfo', 'password'], field_agent: ['mywork', 'register', 'farmers', 'password'], finance: ['usage', 'password'], auditor: ['usage', 'farmers', 'password'],
 };
-const TITLES = { console: 'Verify a farmer', keys: 'API keys', usage: 'Usage', approvals: 'Access requests', farmers: 'Farmers', register: 'Register a farmer', team: 'FarmasLog team', consentinfo: 'Consent details', password: 'Change your password' };
-const TAB = { console: 'Verify', keys: 'API keys', usage: 'Usage', approvals: 'Requests', farmers: 'Farmers', register: 'Register', team: 'Team', consentinfo: 'Consent info', password: 'Password' };
+const TITLES = { console: 'Verify a farmer', keys: 'API keys', usage: 'Usage', approvals: 'Access requests', farmers: 'Farmers', register: 'Register a farmer', team: 'FarmasLog team', consentinfo: 'Consent details', mywork: 'My work', password: 'Change your password' };
+const TAB = { console: 'Verify', keys: 'API keys', usage: 'Usage', approvals: 'Requests', farmers: 'Farmers', register: 'Register', team: 'Team', consentinfo: 'Consent info', mywork: 'My work', password: 'Password' };
 const ORG_TYPES = { bank: 'Bank or lender', government: 'Government agency', ngo: 'NGO or grant funder', programme: 'Agricultural programme', insurer: 'Insurer', cooperative: 'Cooperative', extension: 'Extension service', other: 'Other' };
 const ONBOARD = [['field_agent', 'Field agent'], ['data_manager', 'Data manager'], ['finance', 'Finance'], ['auditor', 'Auditor']];
 
@@ -441,6 +441,43 @@ SCREENS.team = async (el) => {
   await load();
 };
 
+// ---- field agent console: my numbers and the farms waiting for a visit ----
+SCREENS.mywork = async (el) => {
+  const msg = h('div', { 'aria-live': 'polite' }); const tiles = h('div', { class: 'tiles' }); const box = h('div');
+  let scope = 'all';
+  const tile = (n, label, tone) => h('div', { class: `tile${tone ? ` ${tone}` : ''}` }, h('strong', {}, String(n)), h('span', {}, label));
+  const where = (f) => [f.community, f.lga && `${f.lga} LGA`, f.state].filter(Boolean).join(', ');
+  const visit = async (f, outcome) => {
+    msg.replaceChildren();
+    try {
+      let pos = null;
+      if (outcome === 'verified') { msg.replaceChildren(note('Getting your location…', 'info')); pos = await getPos(); }
+      await call(`/v1/farmers/${f.id}/field-verification`, { method: 'POST', body: { outcome, method: 'site_visit', ...(pos ? { location: pos } : {}) } });
+      msg.replaceChildren(note(outcome === 'verified' ? `${f.name}: verified on site${pos ? ` (GPS ±${pos.accuracyMeters} m)` : ' (no GPS captured)'}.` : `${f.name}: not confirmed.`, 'ok'));
+      await load();
+    } catch (e) { msg.replaceChildren(fail(e)); }
+  };
+  const load = async () => {
+    const [s, v] = await Promise.all([call('/v1/agent/summary'), call(`/v1/agent/visits?scope=${scope}&limit=50`)]);
+    tiles.replaceChildren(
+      tile(s.visitsWaiting.mine + s.visitsWaiting.area, 'farms waiting for a visit', s.visitsWaiting.mine + s.visitsWaiting.area ? 'warn' : ''),
+      tile(s.verifiedByMe, 'farms you have verified'), tile(s.registered, 'farmers you registered'),
+      tile(s.byStatus.pending_review + s.byStatus.duplicate_review, 'waiting for review'), tile(s.needsReconsent, 'need new consent', s.needsReconsent ? 'warn' : ''));
+    scopeBox.replaceChildren(
+      ...[['all', 'All'], ['mine', `Mine (${s.visitsWaiting.mine})`], ...(s.patch ? [['area', `My patch (${s.visitsWaiting.area})`]] : [])].map(([v2, t]) => h('button', { type: 'button', class: scope === v2 ? 'primary' : 'secondary', 'aria-pressed': String(scope === v2), onclick: () => { scope = v2; load(); } }, t)),
+      h('span', { class: 'help' }, s.patch ? ` Your patch: ${s.patch.lga ? `${s.patch.lga} LGA, ` : ''}${s.patch.state}` : ' Ask the administrator to set your state so approved farmers near you show up here.'));
+    box.replaceChildren(v.data.length ? table(['Farmer', 'Phone', 'Where', 'From', ''], v.data.map((f) => [
+      f.name,
+      f.phone || (f.contactVia ? `Contact: ${f.contactVia.name || f.contactVia.type.replaceAll('_', ' ')}${f.contactVia.phone ? ` ${f.contactVia.phone}` : ''}` : 'No phone'),
+      where(f), f.visitScope === 'mine' ? 'You registered' : f.source === 'self_registration' ? 'Registered online' : 'Registered by the team',
+      h('div', { class: 'btns' }, h('button', { type: 'button', class: 'primary', onclick: () => visit(f, 'verified') }, 'Verified on site'), h('button', { type: 'button', class: 'secondary', onclick: () => visit(f, 'rejected') }, 'Not confirmed')),
+    ])) : note('No farms are waiting for a visit. New approved farmers will show up here.', 'info'));
+  };
+  const scopeBox = h('div', { class: 'btns' });
+  el.append(h('p', { class: 'sub' }, 'Your numbers, and the approved farmers whose farms still need a visit. Only a visit by an agent makes a record "verified".'), tiles, msg, h('h3', {}, 'Farms to visit'), scopeBox, box);
+  await load();
+};
+
 // ---- consent details: the contact details printed in the consent text. Only the administrator can edit them. ----
 SCREENS.consentinfo = async (el) => {
   const msg = h('div', { 'aria-live': 'polite' }); const box = h('div');
@@ -579,7 +616,13 @@ async function farmerSignup() {
   await areasReady;
   const root = $('#farmer-form');
   const state = { phone: '', proof: '', token: '' };
-  const step = (...kids) => root.replaceChildren(...kids);
+  const STEPS = ['Phone number', 'Text message code', 'About you and your farm', 'Done'];
+  const progress = (n) => h('ol', { class: 'progress', 'aria-label': 'Steps' }, STEPS.map((t, k) => h('li', { class: k + 1 < n ? 'done' : k + 1 === n ? 'now' : '', ...(k + 1 === n ? { 'aria-current': 'step' } : {}) }, t)));
+  const step = (n, ...kids) => root.replaceChildren(progress(n), ...kids);
+  // The text-message service or security check may not be switched on yet: say so plainly and offer the human route.
+  const friendly = (err) => (['SMS_UNAVAILABLE', 'CAPTCHA_UNAVAILABLE', 'NETWORK'].includes(err.code)
+    ? note('Online registration is not available right now. Please message us on WhatsApp or call 0802 863 8349 and a field agent will register you.')
+    : fail(err));
 
   // 1. phone
   function stepPhone(msgNode) {
@@ -589,7 +632,7 @@ async function farmerSignup() {
     let widgetId = null;
     const send = h('button', { type: 'submit', class: 'primary' }, 'Send me a code');
     if (TURNSTILE_KEY) loadTurnstile().then((t) => { widgetId = t.render(cap, { sitekey: TURNSTILE_KEY, callback: (tok) => { state.token = tok; } }); }).catch(() => out.replaceChildren(note('The security check could not load. Check your connection and refresh.')));
-    step(h('h3', {}, 'Step 1 of 3: your phone number'),
+    step(1, h('h3', {}, 'Step 1 of 3: your phone number'),
       h('p', { class: 'help' }, 'We send a 6-digit code by text message to make sure the number is yours. Normal text rates may apply.'),
       h('form', {
         novalidate: true,
@@ -601,7 +644,7 @@ async function farmerSignup() {
             if (TURNSTILE_KEY && !state.token) throw new ApiError(400, 'CAPTCHA_FAILED', 'Please complete the security check first.');
             await api('/v1/public/otp/request', { method: 'POST', body: { phone: state.phone, purpose: 'register', captchaToken: state.token } });
             stepCode();
-          } catch (err) { out.replaceChildren(fail(err)); if (widgetId !== null) { window.turnstile?.reset(widgetId); state.token = ''; } send.disabled = false; }
+          } catch (err) { out.replaceChildren(friendly(err)); if (widgetId !== null) { window.turnstile?.reset(widgetId); state.token = ''; } send.disabled = false; }
         },
       }, field('Your phone number', phone), cap, h('div', { class: 'btns' }, send)), out);
   }
@@ -611,7 +654,7 @@ async function farmerSignup() {
     const code = h('input', { id: 'fs-code', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: 6, pattern: '[0-9]{6}', placeholder: '6-digit code' });
     const out = h('div', { 'aria-live': 'polite' });
     const go = h('button', { type: 'submit', class: 'primary' }, 'Check code');
-    step(h('h3', {}, 'Step 2 of 3: enter the code'),
+    step(2, h('h3', {}, 'Step 2 of 3: enter the code'),
       h('p', { class: 'help' }, `If ${state.phone} is a valid number, a code is on its way. It can take a minute.`),
       h('form', {
         novalidate: true,
@@ -645,7 +688,7 @@ async function farmerSignup() {
     const cw = consentWidget({ self: true });
     const out = h('div', { 'aria-live': 'polite' });
     const submit = h('button', { type: 'submit', class: 'primary' }, 'Register me');
-    step(h('h3', {}, 'Step 3 of 3: about you and your farm'),
+    step(3, h('h3', {}, 'Step 3 of 3: about you and your farm'),
       h('p', { class: 'help' }, `Phone verified: ${state.phone}`),
       h('form', {
         novalidate: true,
@@ -679,7 +722,7 @@ async function farmerSignup() {
 
   // 4. done
   function stepDone(reference) {
-    step(h('div', { class: 'newkey', role: 'status' }, h('h3', {}, 'Thank you. We have received your details.'),
+    step(4, h('div', { class: 'newkey', role: 'status' }, h('h3', {}, 'Thank you. We have received your details.'),
       h('p', {}, 'A FarmasLog team member will check them. Banks and programmes cannot see your record until it is approved, and you can ask us to remove it at any time.'),
       h('p', {}, 'Your reference: ', h('code', {}, reference)),
       h('p', { class: 'help' }, 'Keep this reference. Quote it if you message us on WhatsApp or call 0802 863 8349.')));

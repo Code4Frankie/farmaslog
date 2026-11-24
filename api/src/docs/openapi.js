@@ -12,7 +12,7 @@ export const openapi = {
       'A satellite signal is never proof of a farm or of ownership.',
   },
   servers: [{ url: '/' }],
-  tags: [{ name: 'Verification' }, { name: 'Auth' }, { name: 'Farmers' }, { name: 'Partners & keys' }, { name: 'Reporting' }, { name: 'Webhooks' }, { name: 'Public (farmers)' }],
+  tags: [{ name: 'Verification' }, { name: 'Auth' }, { name: 'Farmers' }, { name: 'Partners & keys' }, { name: 'Reporting' }, { name: 'Webhooks' }, { name: 'Public (farmers)' }, { name: 'Field agents' }],
   paths: {
     '/v1/verify': {
       get: {
@@ -50,6 +50,15 @@ export const openapi = {
         description: 'Without parameters returns every state with its LGAs. With `state` returns that state only. Any area may still be entered by hand.',
         parameters: [{ name: 'state', in: 'query', schema: { type: 'string' }, example: 'Nasarawa' }],
         responses: { 200: { description: 'States / LGAs' }, 404: err('Unknown state') },
+      },
+    },
+    '/v1/agent/summary': { get: { tags: ['Field agents'], summary: 'My numbers (field agent)', security: bearerJwt, description: 'Registrations by status, farms waiting for a visit (`mine` and in my `area`), farms I have verified, and my patch (the state and LGA on the agent account).', responses: { 200: { description: 'OK' }, 403: err('Field agents only') } } },
+    '/v1/agent/visits': {
+      get: {
+        tags: ['Field agents'], summary: 'Farms waiting for a visit (field agent)', security: bearerJwt,
+        description: 'Approved farmers whose farm has no confirming visit yet and who have not withdrawn consent: the agent\'s own registrations plus approved farmers in the agent\'s patch, including self-registered ones. Longest waiting first. Each row has `visitScope` (`mine` | `area`). Agents can open and field-verify farmers in their patch, but only change consent or files on records they registered.',
+        parameters: [{ name: 'scope', in: 'query', schema: { type: 'string', enum: ['mine', 'area', 'all'] } }, { name: 'page', in: 'query', schema: { type: 'integer' } }, { name: 'limit', in: 'query', schema: { type: 'integer' } }],
+        responses: { 200: { description: 'Page of farmers' }, 403: err('Field agents only') },
       },
     },
     '/v1/public/otp/request': {

@@ -27,6 +27,7 @@ const build = ({ allowTemporaryPassword }) => asyncHandler(async (req, _res, nex
     name: user.name,
     role: user.role,
     partnerId: user.partnerId ? String(user.partnerId) : null,
+    state: user.state, lga: user.lga, // a field agent's patch
     mustChangePassword: Boolean(user.mustChangePassword),
   };
   next();

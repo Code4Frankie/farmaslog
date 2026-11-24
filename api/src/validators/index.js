@@ -119,6 +119,12 @@ export const publicRegistrationSchema = Joi.object({
   photo: notCollected('Photos'), photos: notCollected('Photos'),
 });
 
+export const agentVisitsSchema = Joi.object({
+  scope: Joi.string().valid('mine', 'area', 'all').default('all'),
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(25),
+});
+
 export const inclusionStatsSchema = Joi.object({
   state: Joi.string().trim().max(60), lga: Joi.string().trim().max(60),
   groupBy: Joi.string().valid('state', 'lga'),
