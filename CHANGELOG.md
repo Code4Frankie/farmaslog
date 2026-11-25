@@ -1,5 +1,16 @@
 # Changelog
 
+## Consent wording editor and website pages
+- Administrators can now write and publish the consent text from the dashboard. New tab **Consent text** (super admin edits; data manager reads): start a draft (a copy of the English text in use), edit title, sections, tick-box wording and the read-aloud script, one language at a time, see a live preview, then publish.
+- Versioned and immutable: a published version can never be edited (start a new one). Each consent already on record keeps its version and the hash of the exact text shown. Only one draft at a time.
+- Translations: a language is served only when marked reviewed (with the reviewer's name, "translated and back-translated"). Until then farmers get English, as before.
+- Publishing asks what happens to existing farmers: `none`, or `flag` (valid consents on older wordings become `needs_reconsent`; withdrawn stays withdrawn). It is refused while contact details (address, retention, hosting...) are still missing, so a farmer never sees "[retention period]". Only the six known placeholders may be used.
+- New consents must use the version now in force (`wordingVersion` is checked on every request; the built-in `consent-v1-draft` is the starting point). Legacy wordings are accepted for imports as before.
+- New tab **Pages** and public `#/privacy` and `#/terms` pages (footer links). Starter wording is provided as a draft, nothing is public until saved and published; each publish is a new version and earlier ones are kept. Visitors see "being finalised" until then. Have a lawyer review the starter text before publishing.
+- API: `/v1/admin/consent-texts` (list, create draft, get, save language, remove language, discard, publish), `/v1/admin/pages` (list, get, save, publish), public `GET /v1/reference/pages/{slug}`. Audit: `consent_text.draft_created|draft_updated|draft_discarded|published`, `page.draft_saved|published` (version, language and counts only, never the text).
+- Tests: `tests/integration/consent-texts.test.js`, `tests/integration/pages.test.js`.
+- Note: published wordings are cached in memory at start-up. With more than one API instance, restart after publishing (the free Render plan runs one).
+
 ## Phase 7: Offline register
 - Field agents can register farmers with no signal. The app (service worker `web/sw.js`) reopens offline, the consent text for every language is kept on the phone, and a farmer saved offline waits in the browser's storage ("Saved on this phone") until the phone has signal. It then uploads by itself, or with "Upload now". Agents stay signed in on the phone (until the 8-hour sign-in expires) so the app can open without signal.
 - `POST /v1/farmers/sync` (up to 25 records): each record is the usual registration plus `clientId` and `capturedAt`. The server sets source (`field_agent`), channel (`field_app`) and the reference (`app:<agentId>:<clientId>`), so uploading twice, or an online retry after a lost answer, never creates two farmers. Each record gets its own result (`created`, `already_synced`, `duplicate_review`, `error`); a bad record never blocks the others. Consent is dated `capturedAt` and stamped with the server's `recordedAt`. A capture time in the future (more than 10 minutes) or older than 120 days is refused.

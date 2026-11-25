@@ -3,6 +3,9 @@ import { AppError } from '../utils/AppError.js';
 import { validate } from '../middleware/validate.js';
 import { consentReferenceSchema } from '../validators/index.js';
 import { getConsent } from '../services/consent.service.js';
+import { publicPage } from '../services/pages.service.js';
+import { PAGE_SLUGS } from '../config/pages.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 import { AREAS, STATES, matchState } from '../data/ng-geo.js';
 
 const router = Router();
@@ -23,5 +26,12 @@ router.get('/consent', validate(consentReferenceSchema, 'query'), (req, res) => 
   const c = getConsent({ version: req.query.version, language: req.query.lang });
   res.json(c);
 });
+
+// Public: the published privacy notice or terms. 404 until an administrator has published the page.
+router.get('/pages/:slug', asyncHandler(async (req, res) => {
+  if (!PAGE_SLUGS.includes(req.params.slug)) throw new AppError(404, 'NOT_FOUND', 'No such page.');
+  res.set('Cache-Control', 'public, max-age=300');
+  res.json(await publicPage(req.params.slug));
+}));
 
 export default router;

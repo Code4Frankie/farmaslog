@@ -5,11 +5,11 @@ const DEMO_LOGIN = { email: 'demo@farmaslog.test', password: 'demo-password-123'
 const DEMO_USER = { name: 'Demo Lender', role: 'partner_verifier', organization: 'Demo Agri Bank' };
 const ROLES = { super_admin: 'Administrator', data_manager: 'Data manager', field_agent: 'Field agent', partner_verifier: 'Partner', finance: 'Finance', auditor: 'Auditor' };
 const TABS = {
-  partner_verifier: ['console', 'keys', 'usage', 'password'], super_admin: ['approvals', 'farmers', 'register', 'team', 'consentinfo', 'keys', 'usage', 'password'],
-  data_manager: ['farmers', 'register', 'consentinfo', 'password'], field_agent: ['mywork', 'register', 'farmers', 'password'], finance: ['usage', 'password'], auditor: ['usage', 'farmers', 'password'],
+  partner_verifier: ['console', 'keys', 'usage', 'password'], super_admin: ['approvals', 'farmers', 'register', 'team', 'consentinfo', 'consenttext', 'pages', 'keys', 'usage', 'password'],
+  data_manager: ['farmers', 'register', 'consentinfo', 'consenttext', 'pages', 'password'], field_agent: ['mywork', 'register', 'farmers', 'password'], finance: ['usage', 'password'], auditor: ['usage', 'farmers', 'password'],
 };
-const TITLES = { console: 'Verify a farmer', keys: 'API keys', usage: 'Usage', approvals: 'Access requests', farmers: 'Farmers', register: 'Register a farmer', team: 'FarmasLog team', consentinfo: 'Consent details', mywork: 'My work', password: 'Change your password' };
-const TAB = { console: 'Verify', keys: 'API keys', usage: 'Usage', approvals: 'Requests', farmers: 'Farmers', register: 'Register', team: 'Team', consentinfo: 'Consent info', mywork: 'My work', password: 'Password' };
+const TITLES = { console: 'Verify a farmer', keys: 'API keys', usage: 'Usage', approvals: 'Access requests', farmers: 'Farmers', register: 'Register a farmer', team: 'FarmasLog team', consentinfo: 'Consent details', consenttext: 'Consent wording', pages: 'Website pages', mywork: 'My work', password: 'Change your password' };
+const TAB = { console: 'Verify', keys: 'API keys', usage: 'Usage', approvals: 'Requests', farmers: 'Farmers', register: 'Register', team: 'Team', consentinfo: 'Consent info', consenttext: 'Consent text', pages: 'Pages', mywork: 'My work', password: 'Password' };
 const ORG_TYPES = { bank: 'Bank or lender', government: 'Government agency', ngo: 'NGO or grant funder', programme: 'Agricultural programme', insurer: 'Insurer', cooperative: 'Cooperative', extension: 'Extension service', other: 'Other' };
 const ONBOARD = [['field_agent', 'Field agent'], ['data_manager', 'Data manager'], ['finance', 'Finance'], ['auditor', 'Auditor']];
 
@@ -603,6 +603,170 @@ SCREENS.consentinfo = async (el) => {
   await load();
 };
 
+// ---- editors for the consent wording and the website pages (administrator edits, others read) ----
+const FRIENDLY_LANG = { ...LANG_NAMES };
+// replaceChildren would print a literal "null" for skipped parts, so drop them first.
+const fill = (parent, ...kids) => parent.replaceChildren(...kids.flat().filter((k) => k != null && k !== false));
+const area = (id, value, rows = 4, max = 3000) => h('textarea', { id, rows, maxlength: max }, value ?? '');
+const fmtDate = (d) => (d ? new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '');
+// A list of headed paragraphs the administrator can add to, remove from and reorder.
+function sectionsEditor(initial, idp) {
+  const list = h('div', { class: 'sections' });
+  const add = (s = { heading: '', body: '' }) => {
+    const heading = h('input', { value: s.heading, maxlength: 200, 'aria-label': 'Heading' });
+    const body = h('textarea', { rows: 4, maxlength: 3000, 'aria-label': 'Text' }, s.body);
+    const row = h('div', { class: 'secrow' }, heading, body, h('div', { class: 'btns' },
+      h('button', { type: 'button', class: 'secondary', onclick: () => row.previousElementSibling && row.parentNode.insertBefore(row, row.previousElementSibling) }, 'Move up'),
+      h('button', { type: 'button', class: 'secondary', onclick: () => row.nextElementSibling && row.parentNode.insertBefore(row.nextElementSibling, row) }, 'Move down'),
+      h('button', { type: 'button', class: 'secondary', onclick: () => row.remove() }, 'Remove')));
+    row.get = () => ({ heading: heading.value.trim(), body: body.value.trim() });
+    list.append(row);
+  };
+  initial.forEach(add);
+  const node = h('div', { id: idp }, list, h('div', { class: 'btns' }, h('button', { type: 'button', class: 'secondary', onclick: () => add() }, 'Add a section')));
+  return { node, get: () => [...list.children].map((r) => r.get()) };
+}
+const PLACEHOLDER_HELP = 'You can use {{registeredAddress}}, {{email}}, {{phone}}, {{whatsapp}}, {{retention}} and {{hosting}}. They are replaced with the details from "Consent info".';
+const previewBlock = (p) => h('div', { class: 'preview' }, h('h4', {}, p.title), ...p.sections.map((s) => h('p', {}, h('strong', {}, `${s.heading} `), s.body)));
+
+SCREENS.consenttext = async (el) => {
+  const canEdit = user.role === 'super_admin';
+  const msg = h('div', { 'aria-live': 'polite' }); const box = h('div');
+  const STATUS = { draft: ['Draft', 'warn'], published: ['Published', ''] };
+  const say = (n) => { msg.replaceChildren(n); window.scrollTo({ top: 0 }); };
+
+  const showList = async () => {
+    msg.replaceChildren();
+    const r = await call('/v1/admin/consent-texts');
+    fill(box, 
+      table(['Version', 'Status', 'Languages ready', 'Published', ''], r.data.map((v) => [
+        h('span', {}, v.version, v.current ? h('span', { class: 'badge' }, 'In use') : null, v.builtIn ? h('span', { class: 'help' }, ' came with the system') : null),
+        h('span', { class: `badge ${STATUS[v.status][1]}` }, STATUS[v.status][0]),
+        v.languages.filter((l) => l.reviewed).map((l) => FRIENDLY_LANG[l.language]).join(', ') || 'None',
+        fmtDate(v.publishedAt) || (v.builtIn ? '' : 'Not yet'),
+        h('div', { class: 'btns' }, h('button', { type: 'button', class: 'secondary', onclick: () => openVersion(v.version) }, v.status === 'draft' && canEdit ? 'Edit' : 'View')),
+      ])),
+      canEdit && !r.hasDraft ? h('div', { class: 'btns' }, h('button', { type: 'button', class: 'primary', onclick: startDraft }, 'Start a new version')) : null,
+      canEdit && r.hasDraft ? note('A draft is open. Finish or discard it before starting another.', 'info') : null,
+      !canEdit ? h('p', { class: 'help' }, 'Only the administrator can change the consent wording.') : null);
+  };
+  const startDraft = async () => {
+    try { const r = await call('/v1/admin/consent-texts', { method: 'POST', body: {} }); await openVersion(r.data.version); }
+    catch (e) { say(fail(e)); }
+  };
+
+  const openVersion = async (version, lang = 'en') => {
+    msg.replaceChildren();
+    let v;
+    try { v = (await call(`/v1/admin/consent-texts/${version}?lang=${lang}`)).data; } catch (e) { return say(fail(e)); }
+    const editable = canEdit && v.status === 'draft';
+    const langSel = h('select', { id: 'ct-lang', 'aria-label': 'Language' }, Object.entries(FRIENDLY_LANG).map(([k, t]) => h('option', { value: k, selected: k === lang }, `${t}${v.languages.find((l) => l.language === k)?.reviewed ? ' (ready)' : ''}`)));
+    langSel.addEventListener('change', () => openVersion(version, langSel.value));
+    const saved = v.texts[lang];
+    const pv = v.preview;
+    const head = [
+      h('p', {}, h('button', { type: 'button', class: 'secondary', onclick: () => showList().catch((e) => say(fail(e))) }, 'Back to all versions')),
+      h('h3', {}, `${v.version} `, h('span', { class: `badge ${STATUS[v.status][1]}` }, STATUS[v.status][0]), v.current ? h('span', { class: 'badge' }, 'In use') : null),
+      v.status === 'published' ? note('This wording is published and cannot be changed. To change it, start a new version.', 'info') : null,
+      field('Language', langSel),
+      lang !== 'en' && !(saved?.reviewed) ? note(`There is no reviewed ${FRIENDLY_LANG[lang]} text yet. Farmers who choose ${FRIENDLY_LANG[lang]} are shown the English text.`, 'info') : null,
+    ];
+    const preview = h('div', {}, h('h4', {}, 'How farmers will see it'), pv.textLanguage !== lang ? h('p', { class: 'help' }, `Showing ${FRIENDLY_LANG[pv.textLanguage]} because there is no reviewed ${FRIENDLY_LANG[lang]} text.`) : null,
+      pv.incomplete ? note(`Still missing: ${pv.missingPlaceholders.map((k) => PLACEHOLDER_LABELS[k] || k).join(', ')}. Fill them in under "Consent info" before publishing.`, 'info') : null,
+      previewBlock(pv),
+      h('p', {}, h('strong', {}, pv.agreementsIntro)), h('ul', {}, Object.values(pv.agreements).map((a) => h('li', {}, a))),
+      h('h4', {}, 'What the agent reads aloud'), h('p', { class: 'quote' }, pv.readAloud));
+    if (!editable) return fill(box, ...head, preview);
+
+    // Draft: edit this language. A new translation starts from the English text so nothing is forgotten.
+    const base = saved || v.texts.en;
+    const f = {
+      title: h('input', { id: 'ct-title', value: base.title, maxlength: 200 }),
+      intro: h('input', { id: 'ct-intro', value: base.agreementsIntro, maxlength: 400 }),
+      core: area('ct-core', base.agreements.core, 2, 500), share: area('ct-share', base.agreements.partnerSharing, 2, 500), media: area('ct-media', base.agreements.mediaStorage, 2, 500),
+      read: area('ct-read', base.readAloud, 8, 4000), agent: area('ct-agent', base.agentNote, 2, 500),
+      reviewed: h('input', { id: 'ct-rev', type: 'checkbox' }), by: h('input', { id: 'ct-by', value: saved?.reviewedBy || '', maxlength: 120 }),
+    };
+    f.reviewed.checked = !!saved?.reviewed;
+    const secs = sectionsEditor(base.sections, 'ct-secs');
+    const form = h('form', {
+      onsubmit: async (e) => {
+        e.preventDefault(); msg.replaceChildren();
+        const body = { title: f.title.value.trim(), sections: secs.get(), agreementsIntro: f.intro.value.trim(), agreements: { core: f.core.value.trim(), partnerSharing: f.share.value.trim(), mediaStorage: f.media.value.trim() }, readAloud: f.read.value.trim(), agentNote: f.agent.value.trim() };
+        if (lang !== 'en') { body.reviewed = f.reviewed.checked; if (f.reviewed.checked) body.reviewedBy = f.by.value.trim(); }
+        try { await call(`/v1/admin/consent-texts/${version}/${lang}`, { method: 'PUT', body }); await openVersion(version, lang); say(note('Saved.', 'ok')); } catch (err) { say(fail(err)); }
+      },
+    }, h('h4', {}, `Edit the ${FRIENDLY_LANG[lang]} text`), h('p', { class: 'help' }, PLACEHOLDER_HELP),
+    field('Title', f.title), h('h5', {}, 'Sections'), secs.node,
+    field('Line above the tick boxes', f.intro),
+    field('Tick box 1: using the information (required)', f.core), field('Tick box 2: sharing with approved partners', f.share), field('Tick box 3: keeping photos or documents (optional for the farmer)', f.media),
+    field('What the agent reads aloud', f.read, 'Short and plain. It ends with a question the farmer answers yes or no to.'), field('Note for the agent', f.agent),
+    lang !== 'en' ? h('div', { class: 'f' }, h('label', {}, f.reviewed, ' A person has translated this and another person has translated it back to check it'), field('Who reviewed it', f.by, 'Required when the box is ticked. Until then farmers are shown the English text.')) : null,
+    h('div', { class: 'btns' }, h('button', { class: 'primary', type: 'submit' }, 'Save this language'),
+      lang !== 'en' && saved ? h('button', { type: 'button', class: 'secondary', onclick: async () => { if (!confirm(`Remove the ${FRIENDLY_LANG[lang]} text from this draft?`)) return; try { await call(`/v1/admin/consent-texts/${version}/${lang}`, { method: 'DELETE' }); await openVersion(version, 'en'); } catch (err) { say(fail(err)); } } }, 'Remove this language') : null));
+
+    const choice = (val, id, label, help) => h('label', { class: 'opt', for: id }, h('input', { type: 'radio', name: 'ct-reconsent', id, value: val }), h('span', {}, h('strong', {}, label), h('br'), h('span', { class: 'help' }, help)));
+    const publishBox = h('div', { class: 'publish' }, h('h4', {}, 'Publish this version'),
+      h('p', { class: 'help' }, 'From the moment you publish, all new consents use this wording. Consents already given keep the exact text the farmer was shown. The version cannot be changed afterwards.'),
+      choice('none', 'ct-r-none', 'Keep existing farmers as they are', 'Their consent stays valid. Use this for small fixes that do not change what farmers agree to.'),
+      choice('flag', 'ct-r-flag', 'Ask existing farmers to agree again', 'Records on the older wording are marked "needs new consent". Agents will see them on their list.'),
+      h('div', { class: 'btns' },
+        h('button', { type: 'button', class: 'primary', onclick: async () => {
+          const pick = document.querySelector('input[name="ct-reconsent"]:checked');
+          if (!pick) return say(note('Choose what happens to farmers on the older wording.'));
+          if (!confirm(`Publish ${version}? This cannot be undone.`)) return;
+          try { const r = await call(`/v1/admin/consent-texts/${version}/publish`, { method: 'POST', body: { reconsent: pick.value } }); await openVersion(version); say(note(`Published. ${r.data.flaggedCount ? `${r.data.flaggedCount} farmer record(s) now need new consent.` : 'New consents use this wording.'}`, 'ok')); }
+          catch (err) { say(fail(err.code === 'INCOMPLETE_DETAILS' ? Object.assign(err, { message: `Fill in these details first (Consent info tab): ${err.details?.missing?.map((k) => PLACEHOLDER_LABELS[k] || k).join(', ') || ''}`, code: '' }) : err)); }
+        } }, 'Publish'),
+        h('button', { type: 'button', class: 'secondary', onclick: async () => { if (!confirm(`Discard the draft ${version}? Your edits will be lost.`)) return; try { await call(`/v1/admin/consent-texts/${version}`, { method: 'DELETE' }); await showList(); } catch (err) { say(fail(err)); } } }, 'Discard draft')));
+    fill(box, ...head, form, preview, publishBox);
+  };
+
+  el.append(h('p', { class: 'sub' }, 'The wording farmers hear and agree to. Each version is kept: records point to the version, and to a fingerprint of the exact text, the farmer agreed to. Only English is final text until a translation has been checked by two people.'), msg, box);
+  try { await showList(); } catch (e) { fill(box, fail(e)); }
+};
+
+SCREENS.pages = async (el) => {
+  const canEdit = user.role === 'super_admin';
+  const msg = h('div', { 'aria-live': 'polite' }); const box = h('div');
+  const say = (n) => { msg.replaceChildren(n); window.scrollTo({ top: 0 }); };
+  const showList = async () => {
+    msg.replaceChildren();
+    const r = await call('/v1/admin/pages');
+    fill(box, table(['Page', 'On the website', 'Changes', ''], r.data.map((p) => [
+      p.name,
+      p.publishedVersion ? `Version ${p.publishedVersion}, ${fmtDate(p.publishedAt)}` : h('span', { class: 'badge warn' }, 'Not published'),
+      p.hasUnpublishedChanges ? h('span', { class: 'badge warn' }, 'Unpublished changes') : '',
+      h('div', { class: 'btns' }, h('button', { type: 'button', class: 'secondary', onclick: () => open(p.slug) }, canEdit ? 'Edit' : 'View')),
+    ])), !canEdit ? h('p', { class: 'help' }, 'Only the administrator can edit these pages.') : null);
+  };
+  const open = async (slug) => {
+    msg.replaceChildren();
+    let p;
+    try { p = (await call(`/v1/admin/pages/${slug}`)).data; } catch (e) { return say(fail(e)); }
+    const preview = h('div', {}, h('h4', {}, 'How it looks to visitors'),
+      p.missingPlaceholders.length ? note(`Still missing: ${p.missingPlaceholders.map((k) => PLACEHOLDER_LABELS[k] || k).join(', ')}. Fill them in under "Consent info" before publishing.`, 'info') : null, previewBlock(p.preview));
+    const back = h('p', {}, h('button', { type: 'button', class: 'secondary', onclick: () => showList().catch((e) => say(fail(e))) }, 'Back to all pages'));
+    if (!canEdit) return fill(box, back, h('h3', {}, p.name), preview);
+    const title = h('input', { id: 'pg-title', value: p.title, maxlength: 200 });
+    const secs = sectionsEditor(p.sections, 'pg-secs');
+    const saveDraft = async () => { await call(`/v1/admin/pages/${slug}`, { method: 'PUT', body: { title: title.value.trim(), sections: secs.get() } }); };
+    fill(box, back, h('h3', {}, p.name, p.published ? h('span', { class: 'badge' }, ` Version ${p.published.version} live`) : h('span', { class: 'badge warn' }, 'Not published')),
+      p.isStarter ? note('This is starter wording. Edit it, have a lawyer review it, then save and publish. Nothing is public until you publish.', 'info') : null,
+      h('form', { onsubmit: async (e) => { e.preventDefault(); try { await saveDraft(); await open(slug); say(note('Saved. It is not on the website until you publish.', 'ok')); } catch (err) { say(fail(err)); } } },
+        h('p', { class: 'help' }, PLACEHOLDER_HELP), field('Title', title), h('h5', {}, 'Sections'), secs.node,
+        h('div', { class: 'btns' }, h('button', { class: 'primary', type: 'submit' }, 'Save'),
+          h('button', { type: 'button', class: 'secondary', onclick: async () => {
+            if (!confirm(`Publish this ${p.name.toLowerCase()} on the website?`)) return;
+            try { await saveDraft(); await call(`/v1/admin/pages/${slug}/publish`, { method: 'POST' }); await open(slug); say(note('Published. It is now on the website.', 'ok')); }
+            catch (err) { say(fail(err.code === 'INCOMPLETE_DETAILS' ? Object.assign(err, { message: `Fill in these details first (Consent info tab): ${err.details?.missing?.map((k) => PLACEHOLDER_LABELS[k] || k).join(', ') || ''}`, code: '' }) : err)); }
+          } }, 'Save and publish'))),
+      preview);
+  };
+  el.append(h('p', { class: 'sub' }, 'The privacy notice and terms of use shown in the website footer. Each time you publish, a new version goes live and the earlier ones are kept.'), msg, box);
+  try { await showList(); } catch (e) { fill(box, fail(e)); }
+};
+
 // ---- password: everyone can change their own; a new team member is sent here first ----
 SCREENS.password = (el) => {
   const forced = Boolean(user.mustChangePassword);
@@ -629,7 +793,7 @@ SCREENS.password = (el) => {
 
 // ---- shell: sign in / sign up / signed-in app ----
 let current = 'signin';
-const ROUTES = { '#/signin': 'signin', '#/signup': 'signup', '#/agent': 'agent', '#/farmers': 'farmers', '#/government': 'signup', '#/home': 'signin' };
+const ROUTES = { '#/signin': 'signin', '#/signup': 'signup', '#/agent': 'agent', '#/farmers': 'farmers', '#/government': 'signup', '#/home': 'signin', '#/privacy': 'page', '#/terms': 'page' };
 function show(name) {
   current = name;
   for (const e of document.querySelectorAll('[data-view]')) e.hidden = e.dataset.view !== name;
@@ -638,14 +802,30 @@ function show(name) {
   document.querySelector(`[data-view="${name}"] h2`)?.focus({ preventScroll: true });
 }
 function route(scroll = false) {
-  const next = user ? 'app' : ROUTES[location.hash] || (location.hash ? current : 'signin');
+  const next = ROUTES[location.hash] === 'page' ? 'page' : user ? 'app' : ROUTES[location.hash] || (location.hash ? current : 'signin');
   show(next);
+  if (next === 'page') loadPage(location.hash.slice(2));
   if (location.hash === '#/government' && next === 'signup') $('#su-type').value = 'government'; // the Government menu item preselects the type
   if (scroll && next !== 'app') {
     if (location.hash === '#/home') window.scrollTo({ top: 0 }); // Home goes to the very top of the page
     else $('.shell').scrollIntoView({ block: 'start' });
   }
 }
+
+// Privacy notice and terms: public pages written in the dashboard. Until an administrator publishes one, visitors are told it is on its way.
+async function loadPage(slug) {
+  const box = $('#page-body'); const title = $('#page-title');
+  box.replaceChildren(h('p', { class: 'help' }, 'Loading...'));
+  try {
+    const p = await api(`/v1/reference/pages/${slug}`);
+    title.textContent = p.title;
+    box.replaceChildren(...p.sections.flatMap((s) => [h('h3', {}, s.heading), h('p', {}, s.body)]), h('p', { class: 'help' }, `Version ${p.version}, published ${new Date(p.publishedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}.`));
+  } catch (e) {
+    title.textContent = slug === 'terms' ? 'Terms of use' : 'Privacy notice';
+    box.replaceChildren(note(e.status === 404 || e.code === 'NOT_AVAILABLE' ? 'This page is being finalised. For questions, email info@frankiecode.org.ng or call 0802 863 8349.' : e.message, 'info'));
+  }
+}
+$('#page-back').addEventListener('click', (e) => { e.preventDefault(); location.hash = '#/home'; route(true); });
 
 async function openScreen(name) {
   await areasReady;

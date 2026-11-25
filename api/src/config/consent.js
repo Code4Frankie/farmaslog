@@ -5,7 +5,10 @@
 // Bump the version whenever the wording changes. Old versions stay in LEGACY_VERSIONS / TEXTS so existing records can
 // still be explained, but only CURRENT_CONSENT_VERSION is accepted for NEW registrations.
 
+// The wording built into the code. An administrator can publish newer wordings from the dashboard; the version in force is then
+// the one services/consentText.service.js reports, and this stays as the starting point and fallback.
 export const CURRENT_CONSENT_VERSION = 'consent-v1-draft';
+export const BUILT_IN_VERSION = CURRENT_CONSENT_VERSION;
 // Wordings used before this system existed. Records carrying them are flagged "needs_reconsent" by the migration.
 export const LEGACY_VERSIONS = ['console-draft-v0', 'qservers-form-v1'];
 export const KNOWN_VERSIONS = [CURRENT_CONSENT_VERSION, ...LEGACY_VERSIONS];
@@ -24,7 +27,7 @@ export const PLACEHOLDERS = {
   hosting: { label: 'hosting provider/country', env: 'CONSENT_HOSTING' },
 };
 
-const EN_V1 = {
+export const EN_V1 = {
   title: 'FarmasLog: Farmer consent',
   sections: [
     { heading: 'Who we are.', body: 'FarmasLog is run by Frankiecode Solutions, {{registeredAddress}}. We keep a record of smallholder farmers so that banks, insurers and farming programmes can check that a farmer is real and where the farm is. You can contact us at {{email}}, {{phone}} or {{whatsapp}}.' },
@@ -73,11 +76,12 @@ export function isLegacyVersion(v) { return LEGACY_VERSIONS.includes(v); }
 
 /**
  * Build the consent payload for a version + language.
+ * `registry` maps version -> { lang: content }; defaults to the built-in texts (services pass the published ones too).
  * Returns { version, language (requested), textLanguage (actually shown), needsTranslation, title, sections,
  * text (flat string), agreements, agentNote, readAloud, incomplete, missingPlaceholders }.
  */
-export function renderConsent({ version = CURRENT_CONSENT_VERSION, language = 'en', values = {} } = {}) {
-  const byLang = TEXTS[version];
+export function renderConsent({ version = CURRENT_CONSENT_VERSION, language = 'en', values = {}, registry = TEXTS } = {}) {
+  const byLang = registry[version];
   if (!byLang) return null;
   const lang = LANGUAGES.includes(language) ? language : 'en';
   const wanted = byLang[lang];

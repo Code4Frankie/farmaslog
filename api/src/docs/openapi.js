@@ -101,7 +101,7 @@ export const openapi = {
     '/v1/reference/consent': {
       get: {
         tags: ['Reference'], summary: 'Farmer consent text (public)',
-        description: 'Returns the versioned consent text and the agent read-aloud script. Languages without a reviewed translation are served in English (`textLanguage` says what was actually returned, `needsTranslation` is true). `incomplete` is true while the operator has not filled the contact/retention/hosting details.',
+        description: 'Returns the versioned consent text and the agent read-aloud script. The version in force is whatever an administrator last published (`consent-v1-draft` until then); older published versions can still be requested with `version`. Languages without a reviewed translation are served in English (`textLanguage` says what was actually returned, `needsTranslation` is true). `incomplete` is true while the operator has not filled the contact/retention/hosting details.',
         parameters: [
           { name: 'lang', in: 'query', schema: { type: 'string', enum: ['en', 'ha', 'yo', 'ig', 'tiv', 'pcm'], default: 'en' } },
           { name: 'version', in: 'query', schema: { type: 'string', example: 'consent-v1-draft' } },
@@ -233,6 +233,31 @@ export const openapi = {
         responses: { 200: { description: 'Updated details and the keys that changed' }, 400: err('Invalid value'), 403: err('Only a super admin can edit') },
       },
     },
+    '/v1/admin/consent-texts': {
+      get: { tags: ['Consent wording'], summary: 'List consent wordings (super admin, data manager, auditor)', security: bearerJwt, description: 'Every version with its status (`draft` | `published`), the languages that have reviewed text, and which one is `current`. The wording built into the system is listed as `builtIn`.', responses: { 200: { description: 'Versions, `current`, `hasDraft`' }, 403: err('Not allowed for this role') } },
+      post: { tags: ['Consent wording'], summary: 'Start a new draft (super admin, audited)', security: bearerJwt, description: 'Copies the English text now in use. Only one draft can be open at a time. `version` is optional (`consent-v2`, `consent-v3`, ...); the next free number is used when omitted.', requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { version: { type: 'string', example: 'consent-v2' }, notes: { type: 'string' } } } } } }, responses: { 201: { description: 'The draft' }, 409: err('A draft is already open, or the version exists') } },
+    },
+    '/v1/admin/consent-texts/{version}': {
+      parameters: [{ name: 'version', in: 'path', required: true, schema: { type: 'string' } }],
+      get: { tags: ['Consent wording'], summary: 'One version: all texts, plus a preview', security: bearerJwt, parameters: [{ name: 'lang', in: 'query', schema: { type: 'string' } }], description: '`preview` is how a farmer would see it today (contact details filled in; `incomplete` lists any that are still missing).', responses: { 200: { description: 'Version' }, 404: err('No such version') } },
+      delete: { tags: ['Consent wording'], summary: 'Discard a draft (super admin, audited)', security: bearerJwt, responses: { 204: { description: 'Discarded' }, 409: err('Published versions cannot be removed') } },
+    },
+    '/v1/admin/consent-texts/{version}/{language}': {
+      parameters: [{ name: 'version', in: 'path', required: true, schema: { type: 'string' } }, { name: 'language', in: 'path', required: true, schema: { type: 'string', enum: ['en', 'ha', 'yo', 'ig', 'tiv', 'pcm'] } }],
+      put: { tags: ['Consent wording'], summary: 'Save the text for one language in a draft (super admin, audited)', security: bearerJwt, description: 'Body: `title`, `sections[{heading, body}]`, `agreementsIntro`, `agreements{core, partnerSharing, mediaStorage}`, `readAloud`, `agentNote`. Only {{registeredAddress}}, {{email}}, {{phone}}, {{whatsapp}}, {{retention}}, {{hosting}} may be used as placeholders. For a non-English language add `reviewed: true` and `reviewedBy` once a person has translated and back-translated it; until then farmers who choose that language are shown English. The audit entry records the version and language, not the text.', responses: { 200: { description: 'Updated version' }, 400: err('Invalid text or unknown placeholder'), 409: err('Version is published') } },
+      delete: { tags: ['Consent wording'], summary: 'Remove a non-English language from a draft (super admin)', security: bearerJwt, responses: { 200: { description: 'Updated version' }, 400: err('English cannot be removed'), 409: err('Version is published') } },
+    },
+    '/v1/admin/consent-texts/{version}/publish': {
+      post: { tags: ['Consent wording'], summary: 'Publish a draft (super admin, audited)', security: bearerJwt, parameters: [{ name: 'version', in: 'path', required: true, schema: { type: 'string' } }], description: 'Makes this the wording for all new consents and freezes it. `reconsent` is required: `none` leaves existing farmers as they are; `flag` marks farmers whose consent is `valid` on an older wording as `needs_reconsent` (withdrawn stays withdrawn). Refused with `422 INCOMPLETE_DETAILS` (and `details.missing`) while any contact detail used by a ready language is still blank, and with `422 ENGLISH_REQUIRED` without English text.', requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reconsent'], properties: { reconsent: { type: 'string', enum: ['none', 'flag'] } } } } } }, responses: { 200: { description: 'Published version and `flaggedCount`' }, 422: err('Details missing') } },
+    },
+    '/v1/admin/pages': { get: { tags: ['Website pages'], summary: 'List the privacy notice and terms (super admin, data manager, auditor)', security: bearerJwt, responses: { 200: { description: 'Pages with published version and whether there are unpublished changes' } } } },
+    '/v1/admin/pages/{slug}': {
+      parameters: [{ name: 'slug', in: 'path', required: true, schema: { type: 'string', enum: ['privacy', 'terms'] } }],
+      get: { tags: ['Website pages'], summary: 'Page for editing', security: bearerJwt, description: 'The saved draft, else the published text, else starter wording (`isStarter: true`). `preview` has the contact details filled in.', responses: { 200: { description: 'Page' } } },
+      put: { tags: ['Website pages'], summary: 'Save the draft (super admin, audited)', security: bearerJwt, requestBody: { content: { 'application/json': { schema: { type: 'object', required: ['title', 'sections'], properties: { title: { type: 'string' }, sections: { type: 'array', items: { type: 'object', properties: { heading: { type: 'string' }, body: { type: 'string' } } } } } } } } }, responses: { 200: { description: 'Page' }, 400: err('Invalid text or placeholder') } },
+    },
+    '/v1/admin/pages/{slug}/publish': { post: { tags: ['Website pages'], summary: 'Publish the saved draft as the next version (super admin, audited)', security: bearerJwt, parameters: [{ name: 'slug', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: 'Page, now live' }, 409: err('Nothing saved to publish'), 422: err('Contact details used by the page are missing') } } },
+    '/v1/reference/pages/{slug}': { get: { tags: ['Reference'], summary: 'Published privacy notice or terms (public)', parameters: [{ name: 'slug', in: 'path', required: true, schema: { type: 'string', enum: ['privacy', 'terms'] } }], responses: { 200: { description: 'Title, sections, version and date, with contact details filled in' }, 404: err('Not published yet') } } },
     '/v1/usage': { get: { tags: ['Reporting'], summary: 'Usage by partner, plan and period', security: bearerJwt, responses: { 200: { description: 'OK' } } } },
     '/v1/verification-logs': { get: { tags: ['Reporting'], summary: 'Verification request log', security: bearerJwt, responses: { 200: { description: 'OK' } } } },
     '/v1/audit-logs': { get: { tags: ['Reporting'], summary: 'Audit trail (admin, auditor)', security: bearerJwt, responses: { 200: { description: 'OK' } } } },

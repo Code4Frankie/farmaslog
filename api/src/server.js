@@ -6,12 +6,14 @@ import { ensureBootstrapAdmin } from './bootstrap.js';
 import { migrateConsent } from './migrations/consent.js';
 import { migratePhoneIndex } from './migrations/phone.js';
 import { loadSettings } from './services/settings.service.js';
+import { loadConsentTexts } from './services/consentText.service.js';
 
 await connectDb(env.mongoUri);
 await ensureBootstrapAdmin();
 await migratePhoneIndex().then((d) => d && logger.info('phone_index_dropped')).catch((e) => logger.error('phone_migration_failed', { message: e.message }));
 await migrateConsent().then((n) => n && logger.info('consent_migration', { flagged: n })).catch((e) => logger.error('consent_migration_failed', { message: e.message }));
 await loadSettings().catch((e) => logger.error('settings_load_failed', { message: e.message }));
+await loadConsentTexts().catch((e) => logger.error('consent_texts_load_failed', { message: e.message }));
 const server = createApp().listen(env.port, () => logger.info('farmaslog_api_listening', { port: env.port, env: env.nodeEnv }));
 
 async function shutdown(signal) {

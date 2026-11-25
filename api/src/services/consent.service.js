@@ -2,12 +2,13 @@ import crypto from 'node:crypto';
 import { consentDetails } from './settings.service.js';
 import { AppError } from '../utils/AppError.js';
 import { writeAudit } from './audit.service.js';
-import { CURRENT_CONSENT_VERSION, isLegacyVersion, renderConsent } from '../config/consent.js';
+import { isLegacyVersion, renderConsent } from '../config/consent.js';
+import { currentVersion, registry } from './consentText.service.js';
 
 export const consentValues = () => consentDetails();
 
-export function getConsent({ version = CURRENT_CONSENT_VERSION, language = 'en' } = {}) {
-  return renderConsent({ version, language, values: consentValues() });
+export function getConsent({ version = currentVersion(), language = 'en' } = {}) {
+  return renderConsent({ version, language, values: consentValues(), registry: registry() });
 }
 
 /** Build the stored consent sub-document from validated input. Server time and recorder are always set here. */

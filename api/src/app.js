@@ -19,6 +19,7 @@ import meRoutes from './routes/me.routes.js';
 import staffRoutes from './routes/staff.routes.js';
 import publicRoutes from './routes/public.routes.js';
 import agentRoutes from './routes/agent.routes.js';
+import contentRoutes from './routes/content.routes.js';
 import { openapi } from './docs/openapi.js';
 
 export function createApp() {
@@ -57,6 +58,7 @@ export function createApp() {
   app.use('/v1/farmers', farmerRoutes);
   app.use('/v1', accessRoutes);
   app.use('/v1', adminRoutes);
+  app.use('/v1', contentRoutes);
 
   app.use(notFound);
   app.use(errorHandler);
